@@ -27,13 +27,13 @@
         }
     </style>
 
-    <script src="./dist/index.mjs" type="module"></script>
+    <script src="./dist/web/NodeFlow.js" type="module"></script>
 </head>
 
 <body>
     <canvas id="canvas"></canvas>
     <script type="module">
-        import { Theme, FlowNode, NodeFlowGraph, FlowNote } from "./dist/index.mjs";
+        import { Theme, FlowNode, NodeFlowGraph, FlowNote } from "./dist/web/NodeFlow.js";
 
         const canvas = document.getElementById("canvas");
         Theme.FontFamily = "Source Code Pro";

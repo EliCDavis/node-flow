@@ -5,7 +5,7 @@ const buildOptsWeb: BuildOptions = {
   outfile: './dist/web/NodeFlow.js',
   platform: 'browser',
   target: ['esNext'],
-  //   format: 'cjs',
+  format: 'esm',
   bundle: true,
   sourcemap: true,
   minify: true,

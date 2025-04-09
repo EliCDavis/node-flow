@@ -35,7 +35,7 @@ export class TextElement extends RenderElementBase {
 
     doRender(ctx: CanvasRenderingContext2D, position: Vector2, graphScale: number, scaledFillableSpace: Vector2): void {
         const scale = Zero();
-        this.calcSize(ctx, scale);
+        this.calcSize(ctx, scale, scaledFillableSpace);
         ScaleVector(scale, graphScale);
 
         const justifiedPosition = Zero();
@@ -77,10 +77,38 @@ export class TextElement extends RenderElementBase {
             default:
                 throw new Error("unimplemented justification: " + this.#align);
         }
-        this.#text.render(ctx, graphScale, justifiedPosition);
+
+        if (scaledFillableSpace.x <= 0) {
+            this.#text.render(ctx, graphScale, justifiedPosition);
+        } else {
+            const eles = this.#text.breakIntoLines(ctx, scaledFillableSpace.x);
+
+            const tempSize = { x: 0, y: 0 };
+            for (let i = 0; i < eles.length; i++) {
+                eles[i].render(ctx, graphScale, justifiedPosition);
+                eles[i].size(ctx, 1, tempSize)
+                justifiedPosition.y += tempSize.y
+            }
+        }
     }
 
-    calcSize(ctx: CanvasRenderingContext2D, out: Vector2): void {
-        this.#text.size(ctx, 1, out);
+    calcSize(ctx: CanvasRenderingContext2D, out: Vector2, limitations: Vector2): void {
+
+        if (limitations.x <= 0) {
+            this.#text.size(ctx, 1, out);
+            return;
+        }
+
+        const eles = this.#text.breakIntoLines(ctx, limitations.x);
+
+        const tempSize = { x: 0, y: 0 };
+        out.x = 0;
+        out.y = 0;
+        for (let i = 0; i < eles.length; i++) {
+            eles[i].size(ctx, 1, tempSize)
+            out.x = Math.max(tempSize.x, out.x);
+            out.y += tempSize.y
+        }
+
     }
 }

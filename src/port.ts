@@ -1,11 +1,15 @@
 import { Camera } from "./camera";
 import { Connection } from './connection';
+import { RenderElementBase } from "./elements/base";
+import { ContainerRenderElement, AlignItems } from './elements/container';
+import { TextAlign, TextElement } from "./elements/text";
 import { FlowNode } from "./node";
 import { PassSubsystem } from "./pass/subsystem";
-import { TextAlign } from "./styles/canvasTextAlign";
-import { Box, BoxIntersection, InBox } from "./types/box";
+import { FontStyle } from "./styles/text";
+import { Box, InBox } from "./types/box";
+import { Text } from "./types/text";
 import { Vector2 } from "./types/vector2";
-import { Color, HSV, HSV2RGB, RgbToHex } from "./utils/color";
+import { Color, HSV, HSV2RGB, RgbToHex } from './utils/color';
 
 export enum PortType {
     Input = "INPUT",
@@ -25,6 +29,7 @@ type ConnectionChangeCallback = (connection: Connection, connectionIndex: number
 export interface PortConfig {
     name?: string;
     type?: string;
+    description?: string;
     array?: boolean;
     emptyStyle?: PortStyle;
     filledStyle?: PortStyle;
@@ -64,9 +69,11 @@ export class Port {
 
     #dataType: string;
 
+    #dataTypePopupElement: RenderElementBase;
+
     #onConnectionAdded: Array<ConnectionChangeCallback>;
 
-    #onConnectionRemoved: Array<ConnectionChangeCallback>;;
+    #onConnectionRemoved: Array<ConnectionChangeCallback>;
 
     constructor(node: FlowNode, portType: PortType, config?: PortConfig) {
         this.#node = node;
@@ -98,6 +105,43 @@ export class Port {
         if (config?.onConnectionRemoved) {
             this.#onConnectionRemoved.push(config?.onConnectionRemoved);
         }
+
+        const containerElements = new Array<RenderElementBase>();
+        let dataTypeDisplay = this.#dataType;
+        if (config?.array === true) {
+            dataTypeDisplay = "Array<" + dataTypeDisplay + ">"
+        }
+        containerElements.push(new TextElement(
+            new Text(dataTypeDisplay, {
+                color: "white",
+            }),
+            {
+                Align: TextAlign.Center,
+            }
+        ));
+
+        const description = config?.description;
+        if (description && description !== "") {
+            containerElements.push(new TextElement(
+                new Text(description, { color: "white", style: FontStyle.Italic }),
+                {
+                    Align: TextAlign.Center,
+                    Padding: { Top: 8 },
+                    MaxWidth: 300
+                }
+            ));
+        }
+
+        this.#dataTypePopupElement = new ContainerRenderElement(
+            containerElements,
+            {
+                BackgroundColor: "rgba(0, 0, 0, 0.75)",
+                Border: {
+                    Radius: 6,
+                },
+                Padding: 13,
+            }
+        );
     }
 
     addConnection(connection: Connection): void {
@@ -183,20 +227,12 @@ export class Port {
             const xPos = position.x;
             const yPos = position.y;
 
+            // TODO: Make it so we're not creating a new lambda each frame
             postProcess.queue(() => {
-                ctx.textAlign = TextAlign.Center;
-
-                const padding = 13;
-                const measurement = ctx.measureText(this.#dataType)
-                const w = measurement.width + (padding * camera.zoom);
-
-                ctx.beginPath();
-                ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-                ctx.roundRect(xPos - w / 2, yPos + (scaledRadius * 3) - (padding * camera.zoom), w, (padding * 2) * camera.zoom, 4 * camera.zoom);
-                ctx.fill();
-
-                ctx.fillStyle = "#FFFFFF";
-                ctx.fillText(this.#dataType, xPos, yPos + (scaledRadius * 3));
+                const size = { x: 0, y: 0 }
+                this.#dataTypePopupElement.calcSize(ctx, size, { x: -1, y: -1 });
+                // size.x = Math.min(150, size.x)
+                this.#dataTypePopupElement.render(ctx, { x: xPos - (size.x / 2), y: yPos }, 1, size)
             })
         }
 

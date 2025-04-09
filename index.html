@@ -203,7 +203,11 @@ let node = new FlowNode({
         { name: "b", type: "float32" }
     ],
      outputs: [
-        { name: "sum", type: "float32" }
+        { 
+            name: "sum", 
+            type: "float32", 
+            description: "The sum of a and b"
+        }
     ],
 });
 graph.addNode(node);
@@ -221,8 +225,8 @@ node.addOutput({ name: "sum", type: "float32" })
 
         var sumNode = new FlowNode({
             position: {
-                x: 850,
-                y: 600
+                x: 750,
+                y: 700
             },
             title: "Add",
             info: "I add two numbers",
@@ -231,14 +235,14 @@ node.addOutput({ name: "sum", type: "float32" })
                 { name: "b", type: "float32" }
             ],
             outputs: [
-                { name: "sum", type: "float32" }
+                { name: "sum", type: "float32", description: "The sum of a and b" }
             ],
         });
 
 
         var aNode = new FlowNode({
             position: {
-                x: 550,
+                x: 450,
                 y: 500
             },
             title: "Number",
@@ -256,7 +260,7 @@ node.addOutput({ name: "sum", type: "float32" })
 
         var bNode = new FlowNode({
             position: {
-                x: 550,
+                x: 450,
                 y: 650
             },
             title: "Number",
@@ -280,17 +284,17 @@ node.addOutput({ name: "sum", type: "float32" })
 
         const arrNode = new FlowNode({
             position: {
-                x: 1050,
-                y: 600
+                x: 950,
+                y: 700
             },
             title: "Add",
             subTitle: "Array Inputs",
             info: "This node contains a port that can take multiple input nodes at once, which can be useful for operations that can operate on [0,n] data sizes",
             inputs: [
-                { name: "numbers", type: "float32", array: true },
+                { name: "numbers", type: "float32", array: true, description: "All numbers to add together" },
             ],
             outputs: [
-                { name: "sum", type: "float32" }
+                { name: "sum", type: "float32", description: "The sum of all connected nodes to our 'numbers' port" }
             ],
         });
 

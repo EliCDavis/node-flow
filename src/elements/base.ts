@@ -107,6 +107,7 @@ export abstract class RenderElementBase implements IRenderElement {
         this.doRender(ctx, offsetPosition, graphScale, elementSize);
     }
 
+    // todo: Remove limitations argument?
     abstract calcSize(ctx: CanvasRenderingContext2D, out: Vector2, limitations: Vector2): void;
 
     protected maxLimitations(out: Vector2): void {

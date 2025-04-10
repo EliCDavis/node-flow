@@ -126,8 +126,9 @@ export class Port {
                 new Text(description, { color: "white", style: FontStyle.Italic }),
                 {
                     Align: TextAlign.Center,
-                    Padding: { Top: 8 },
-                    MaxWidth: 300
+                    Padding: { Top: 16 },
+                    MaxWidth: 400,
+                    LineHeight: 1.5
                 }
             ));
         }

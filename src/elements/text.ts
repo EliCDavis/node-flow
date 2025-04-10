@@ -17,6 +17,7 @@ export enum VerticalAlign {
 export interface TextElementStyling extends RenderElementBaseStyling {
     Align?: TextAlign
     VerticalAlign?: VerticalAlign
+    LineHeight?: number
 }
 
 export class TextElement extends RenderElementBase {
@@ -26,11 +27,14 @@ export class TextElement extends RenderElementBase {
 
     #verticalAlign: VerticalAlign;
 
+    #lineHeight: number;
+
     constructor(text: Text, styling?: TextElementStyling) {
         super(styling);
         this.#text = text;
         this.#align = styling?.Align ?? TextAlign.Left;
         this.#verticalAlign = styling?.VerticalAlign ?? VerticalAlign.Top;
+        this.#lineHeight = styling?.LineHeight ?? 1;
     }
 
     doRender(ctx: CanvasRenderingContext2D, position: Vector2, graphScale: number, scaledFillableSpace: Vector2): void {
@@ -87,28 +91,24 @@ export class TextElement extends RenderElementBase {
             for (let i = 0; i < eles.length; i++) {
                 eles[i].render(ctx, graphScale, justifiedPosition);
                 eles[i].size(ctx, 1, tempSize)
-                justifiedPosition.y += tempSize.y
+                justifiedPosition.y += this.#text.style().getSize() * this.#lineHeight
             }
         }
     }
 
     calcSize(ctx: CanvasRenderingContext2D, out: Vector2, limitations: Vector2): void {
-
         if (limitations.x <= 0) {
             this.#text.size(ctx, 1, out);
             return;
         }
 
         const eles = this.#text.breakIntoLines(ctx, limitations.x);
-
         const tempSize = { x: 0, y: 0 };
         out.x = 0;
-        out.y = 0;
+        out.y = this.#text.style().getSize() * eles.length * this.#lineHeight;
         for (let i = 0; i < eles.length; i++) {
             eles[i].size(ctx, 1, tempSize)
             out.x = Math.max(tempSize.x, out.x);
-            out.y += tempSize.y
         }
-
     }
 }

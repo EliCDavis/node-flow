@@ -54,7 +54,7 @@ export class Publisher {
             const slashIndex = key.indexOf("/")
             const bracketIndex = key.indexOf("[")
 
-            if (slashIndex === -1 || bracketIndex < slashIndex) {
+            if (slashIndex === -1 || (bracketIndex !== -1 && bracketIndex < slashIndex)) {
                 items.push({
                     name: key,
                     callback: () => {

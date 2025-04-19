@@ -25,7 +25,11 @@ if (enableWatch) {
   };
 
   serve(serveOpts, {}).then((result) => {
-    console.log(`serving extension from "${serveOpts.servedir}" at "http://${result.host}:${result.port}"`);
+    let host = result.host;
+    if (host === "0.0.0.0") {
+      host = "localhost"
+    }
+    console.log(`serving extension from "${serveOpts.servedir}" at "http://${host}:${result.port}"`);
   });
 }
 

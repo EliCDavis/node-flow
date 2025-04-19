@@ -51,8 +51,10 @@ export class Publisher {
         const subMenus = new Map<string, Map<string, FlowNodeConfig>>();
 
         for (let [key, nodeConfig] of subMenu) {
-            const elements = key.split("/");
-            if (elements.length === 1) {
+            const slashIndex = key.indexOf("/")
+            const bracketIndex = key.indexOf("[")
+
+            if (slashIndex === -1 || bracketIndex < slashIndex) {
                 items.push({
                     name: key,
                     callback: () => {
@@ -62,6 +64,7 @@ export class Publisher {
                     },
                 });
             } else {
+                const elements = key.split("/");
                 if (!subMenus.has(elements[0])) {
                     subMenus.set(elements[0], new Map<string, FlowNodeConfig>());
                 }

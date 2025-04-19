@@ -2,7 +2,7 @@
   "name": "@elicdavis/node-flow",
   "description": "build node graphs",
   "author": "Eli C Davis",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "license": "MIT",
   "keywords": [
     "nodes",

@@ -136,7 +136,7 @@ export class Port {
         this.#dataTypePopupElement = new ContainerRenderElement(
             containerElements,
             {
-                BackgroundColor: "rgba(0, 0, 0, 0.75)",
+                BackgroundColor: "rgba(0, 0, 0, 0.85)",
                 Border: {
                     Radius: 6,
                 },

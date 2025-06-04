@@ -396,6 +396,10 @@ export class NodeFlowGraph {
         this.#mainNodeSubsystem.addNode(node);
     }
 
+    removeNode(node: FlowNode): void {
+        this.#mainNodeSubsystem.removeNode(node);
+    }
+
     addNote(note: FlowNote): void {
         this.#mainNoteSubsystem.addNote(note);
     }

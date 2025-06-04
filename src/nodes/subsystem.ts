@@ -139,7 +139,7 @@ export class NodeSubsystem {
     public addOnNodeCreatedListener(callback: NodeCreatedCallback): void {
         this.#nodeFactory.addOnNodeCreatedListener(callback);
     }
-    
+
     public nodeFactory(): NodeFactory {
         return this.#nodeFactory;
     }
@@ -475,6 +475,14 @@ export class NodeSubsystem {
 
     #interactingWithWidget(): boolean {
         return this.#widgetCurrentlyClicking !== null;
+    }
+
+    removeNode(node: FlowNode): void {
+        for (let i = 0; i < this.#nodes.length; i++) {
+            if (this.#nodes[i] === node) {
+                this.#removeNodeByIndex(i);
+            }
+        }
     }
 
     #removeNodeByIndex(nodeIndex: number): void {

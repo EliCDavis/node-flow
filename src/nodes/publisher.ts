@@ -46,6 +46,10 @@ export class Publisher {
         this.#registeredNodes.set(nodeType, config);
     }
 
+    unregister(nodeType: string): boolean {
+        return this.#registeredNodes.delete(nodeType);
+    }
+
     #recurseBuildMenu(graph: NodeSubsystem, name: string, subMenu: Map<string, FlowNodeConfig>, position: Vector2): ContextMenuConfig {
         const items: Array<ContextMenuItemConfig> = [];
         const subMenus = new Map<string, Map<string, FlowNodeConfig>>();

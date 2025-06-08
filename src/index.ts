@@ -1,7 +1,5 @@
-import { NodeFlowGraph } from './graph';
-import { FlowNode, FlowNodeConfig } from './node';
-
-export { NodeFlowGraph, FlowNode, FlowNodeConfig };
+export * from './graph';
+export * from './node';
 
 import { Theme } from './theme';
 export { Theme };

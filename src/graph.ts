@@ -21,7 +21,7 @@ import { QuickMenu } from './quickMenu';
 export type GraphRenderer = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, position: Vector2, scale: number) => void;
 
 function BuildBackgroundRenderer(backgroundColor: string): GraphRenderer {
-    return (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, position: Vector2, scale: number) => {
+    return (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, position: Vector2, scale: number): void => {
         context.fillStyle = backgroundColor;
         context.fillRect(0, 0, canvas.width, canvas.height);
 

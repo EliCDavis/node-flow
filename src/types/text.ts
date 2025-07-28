@@ -2,6 +2,11 @@ import { FontWeight, TextStyle, TextStyleConfig } from "../styles/text";
 import { splitString, splitStringIntoLines } from "../utils/string";
 import { CopyVector2, ScaleVector, Vector2, Zero } from "./vector2";
 
+export interface MultilineTextConfig {
+    MaxWidth?: number;
+    LineSpacing?: number;
+}
+
 export class Text {
 
     #measured: boolean
@@ -12,11 +17,20 @@ export class Text {
 
     #value: string
 
-    constructor(value: string, style?: TextStyleConfig) {
+    #maxWidth: number;
+
+    #lineSpacing: number;
+
+    #textToRender: Array<string>;
+
+    constructor(value: string, style?: TextStyleConfig, config?: MultilineTextConfig) {
         this.#value = value;
         this.#measured = false;
         this.#size = Zero();
         this.#style = new TextStyle(style);
+        this.#maxWidth = config?.MaxWidth ? config?.MaxWidth : -1;
+        this.#lineSpacing = config?.LineSpacing ? config?.LineSpacing : 5;
+        this.#textToRender = [value];
 
         if (!document.fonts.check(`16px "${this.#style.getFont()}"`)) {
             document.fonts.addEventListener("loadingdone", (event) => {
@@ -96,10 +110,28 @@ export class Text {
             return;
         }
 
+
         this.#style.setupStyle(ctx, 1);
-        const measurements = ctx.measureText(this.#value);
-        this.#size.x = measurements.width;
-        this.#size.y = measurements.actualBoundingBoxAscent + measurements.actualBoundingBoxDescent;
+
+        if (this.#maxWidth == -1) {
+            const measurements = ctx.measureText(this.#value);
+            this.#size.x = measurements.width;
+            this.#size.y = measurements.actualBoundingBoxAscent + measurements.actualBoundingBoxDescent;
+            this.#textToRender = [this.#value];
+            this.#measured = true;
+            return;
+        }
+
+        this.#textToRender = splitStringIntoLines(ctx, this.#value, this.#maxWidth);
+
+        this.#size.x = 0;
+        this.#size.y = 0;
+        for (let i = 0; i < this.#textToRender.length; i++) {
+            const measurements = ctx.measureText(this.#textToRender[i]);
+            this.#size.x = Math.max(this.#size.x, measurements.width);
+        }
+
+        this.#size.y += ((this.#textToRender.length - 1) * this.#lineSpacing) + (this.#style.getSize() * this.#textToRender.length);
         this.#measured = true;
     }
 
@@ -109,10 +141,15 @@ export class Text {
         ScaleVector(out, scale);
     }
 
+    height(ctx: CanvasRenderingContext2D): number {
+        this.#measure(ctx);
+        return this.#size.y;
+    }
+
     setColor(color: string): void {
         this.#style.setColor(color);
     }
-    
+
     getColor(): string {
         return this.#style.getColor();
     }
@@ -126,8 +163,17 @@ export class Text {
     }
 
     render(ctx: CanvasRenderingContext2D, scale: number, position: Vector2): void {
-        this.#style.setupStyle(ctx, scale)
-        ctx.fillText(this.#value, position.x, position.y);
+        this.#measure(ctx);
+        this.#style.setupStyle(ctx, scale);
+        let yOffset = 0;
+        for (let i = 0; i < this.#textToRender.length; i++) {
+            ctx.fillText(
+                this.#textToRender[i],
+                position.x,
+                position.y + yOffset
+            );
+            yOffset += (this.#style.getSize() + this.#lineSpacing) * scale
+        }
     }
 
     style(): TextStyle {

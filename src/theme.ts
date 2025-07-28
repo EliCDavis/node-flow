@@ -20,6 +20,11 @@ export const Theme = {
         },
         Port: {
             FontColor: "#afb9bb"
+        },
+        Message: {
+            InfoColor: "#afb9bb",
+            WarnColor: "#f1f663ff",
+            ErrorColor: "#FF0000"
         }
     },
     BoxSelect: {

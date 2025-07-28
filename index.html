@@ -296,6 +296,15 @@ node.addOutput({ name: "sum", type: "float32" })
             outputs: [
                 { name: "sum", type: "float32", description: "The sum of all connected nodes to our 'numbers' port" }
             ],
+            messages: [
+                {
+                    message: "I am a message attatched to the node"
+                },
+                {
+                    message: "I am another message attatched to the node with type \"error\"",
+                    type: "error"
+                }
+            ],
         });
 
         graph.addNode(sumNode)

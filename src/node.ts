@@ -56,11 +56,39 @@ export interface FlowNodeStyle {
     portText?: TextStyleConfig;
 }
 
+export enum MessageType {
+    Info = "info",
+    Warning = "warning",
+    Error = "error"
+};
+
+function MessageTypeColor(messageType: MessageType): string {
+    switch (messageType) {
+        case MessageType.Info:
+            return Theme.Node.Message.InfoColor;
+
+        case MessageType.Warning:
+            return Theme.Node.Message.WarnColor;
+
+        case MessageType.Error:
+            return Theme.Node.Message.ErrorColor;
+
+        default:
+            throw new Error(`unrecognized message type ${messageType}`)
+    }
+}
+
+export interface NodeMessageConfig {
+    message: string;
+    type?: MessageType;
+}
+
 export interface FlowNodeConfig {
     position?: Vector2;
     title?: string;
     subTitle?: string;
     info?: string;
+    messages?: Array<NodeMessageConfig>
     locked?: boolean;
     data?: Metadata;
     contextMenu?: ContextMenuConfig;
@@ -111,6 +139,29 @@ export interface NodeIntersection {
 
 }
 
+class MessageRenderer {
+
+    #text: Text;
+
+    constructor(config: NodeMessageConfig) {
+        this.#text = new Text(config.message,
+            {
+                color: MessageTypeColor(config.type ? config.type : MessageType.Info),
+            },
+            {
+                LineSpacing: 2.5,
+                MaxWidth: 200
+            }
+        );
+    }
+
+    render(ctx: CanvasRenderingContext2D, scale: number, position: Vector2): number {
+        ctx.textAlign = TextAlign.Center;
+        this.#text.render(ctx, scale, position);
+        return this.#text.height(ctx) * scale;
+    }
+}
+
 export class FlowNode {
 
     #position: Vector2;
@@ -122,6 +173,8 @@ export class FlowNode {
     #infoSymbol: Text;
 
     #infoText: string;
+
+    #messages: Array<MessageRenderer>
 
     #input: Array<Port>;
 
@@ -202,6 +255,14 @@ export class FlowNode {
         this.#canEditInfo = config?.canEditInfo === undefined ? false : config.canEditInfo;
         this.#contextMenu = config?.contextMenu === undefined ? null : config.contextMenu;
         this.#metadata = config?.metadata;
+
+        this.#messages = [];
+        if (config?.messages) {
+            for (let i = 0; i < config.messages.length; i++) {
+                const message = config.messages[i];
+                this.#messages.push(new MessageRenderer(message));
+            }
+        }
 
         this.#selected = false;
         this.#onSelect = new Array<() => void>();
@@ -879,7 +940,6 @@ export class FlowNode {
             console.warn("setInfo instruction ignored, as node has been marked un-editable");
         }
 
-
         let cleaned = newInfo;
         if (cleaned === null || cleaned === undefined) {
             cleaned = "";
@@ -933,6 +993,14 @@ export class FlowNode {
             throw new Error("no registered border style for state: " + state)
         }
         return boxStyle;
+    }
+
+    addMessage(message: NodeMessageConfig): void {
+        this.#messages.push(new MessageRenderer(message));
+    }
+
+    clearMessages(): void {
+        this.#messages = [];
     }
 
     render(ctx: CanvasRenderingContext2D, camera: Camera, state: NodeState, mousePosition: Vector2 | undefined, postProcess: PassSubsystem): void {
@@ -1113,6 +1181,7 @@ export class FlowNode {
                 startY += tempMeasurement.y + scaledElementSpacing;
             }
 
+            // Widgets
             for (let i = 0; i < this.#widgets.length; i++) {
                 const widget = this.#widgets[i];
                 const widgetSize = widget.Size();
@@ -1124,6 +1193,15 @@ export class FlowNode {
 
                 this.#widgetPositions.Push(widget.Draw(ctx, position, camera.zoom, mousePosition));
                 startY += (widgetSize.y * camera.zoom) + scaledElementSpacing;
+            }
+
+            // Messages
+            const messageStart = VectorPool.get();
+            messageStart.x = nodeBounds.Position.x + (nodeBounds.Size.x / 2);
+            messageStart.y = nodeBounds.Position.y + nodeBounds.Size.y + (15 * camera.zoom);
+            for (let i = 0; i < this.#messages.length; i++) {
+                const message = this.#messages[i];
+                messageStart.y += message.render(ctx, camera.zoom, messageStart) + (10 * camera.zoom);
             }
         })
     }

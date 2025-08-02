@@ -35,7 +35,6 @@ type TitleChangeCallback = (node: FlowNode, oldTitle: string, newTitle: string) 
 type InfoChangeCallback = (node: FlowNode, oldInfo: string, newInfo: string) => void
 
 
-
 export interface WidgetConfig {
     type?: string,
     config?: any
@@ -81,6 +80,8 @@ function MessageTypeColor(messageType: MessageType): string {
 export interface NodeMessageConfig {
     message: string;
     type?: MessageType;
+    alwaysShow?: boolean;
+    color?: string;
 }
 
 export interface FlowNodeConfig {
@@ -143,10 +144,13 @@ class MessageRenderer {
 
     #text: Text;
 
+    #alwaysShow: boolean;
+
     constructor(config: NodeMessageConfig) {
+        this.#alwaysShow = config.alwaysShow ? config.alwaysShow : false;
         this.#text = new Text(config.message,
             {
-                color: MessageTypeColor(config.type ? config.type : MessageType.Info),
+                color: config.color ? config.color : MessageTypeColor(config.type ? config.type : MessageType.Info),
             },
             {
                 LineSpacing: 2.5,
@@ -155,7 +159,10 @@ class MessageRenderer {
         );
     }
 
-    render(ctx: CanvasRenderingContext2D, scale: number, position: Vector2): number {
+    render(ctx: CanvasRenderingContext2D, scale: number, position: Vector2, hovering: boolean): number {
+        if (!this.#alwaysShow && !hovering) {
+            return 0;
+        }
         ctx.textAlign = TextAlign.Center;
         this.#text.render(ctx, scale, position);
         return this.#text.height(ctx) * scale;
@@ -1201,7 +1208,7 @@ export class FlowNode {
             messageStart.y = nodeBounds.Position.y + nodeBounds.Size.y + (15 * camera.zoom);
             for (let i = 0; i < this.#messages.length; i++) {
                 const message = this.#messages[i];
-                messageStart.y += message.render(ctx, camera.zoom, messageStart) + (10 * camera.zoom);
+                messageStart.y += message.render(ctx, camera.zoom, messageStart, !(state === NodeState.Idle)) + (10 * camera.zoom);
             }
         })
     }

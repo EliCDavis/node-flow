@@ -298,11 +298,16 @@ node.addOutput({ name: "sum", type: "float32" })
             ],
             messages: [
                 {
-                    message: "I am a message attatched to the node"
+                    message: "I am a message attatched to the node",
+                    alwaysShow: true,
+                },
+                  {
+                    message: "I am a message that only shows when you're hovering over the node!",
                 },
                 {
                     message: "I am another message attatched to the node with type \"error\"",
-                    type: "error"
+                    type: "error",
+                    alwaysShow: true,
                 }
             ],
         });

@@ -1,0 +1,50 @@
+{
+  "name": "@elicdavis/node-flow",
+  "description": "build node graphs",
+  "author": "Eli C Davis",
+  "version": "0.1.10",
+  "license": "MIT",
+  "keywords": [
+    "nodes",
+    "node-flow",
+    "graph"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "ts-node ./esbuild.ts",
+    "watch": "npm run build -- --watch",
+    "package": "tsup"
+  },
+  "homepage": "https://github.com/EliCDavis/node-flow",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EliCDavis/node-flow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/EliCDavis/node-flow/issues"
+  },
+  "devDependencies": {
+    "@esbuild-plugins/node-globals-polyfill": "^0.1.1",
+    "@esbuild-plugins/node-modules-polyfill": "^0.1.4",
+    "@types/glob": "^7.2.0",
+    "@types/mocha": "^9.1.1",
+    "@types/node": "16.x",
+    "@typescript-eslint/eslint-plugin": "^5.31.0",
+    "@typescript-eslint/parser": "^5.31.0",
+    "abort-controller": "^3.0.0",
+    "esbuild": "^0.15.11",
+    "eslint": "^8.20.0",
+    "eslint-config-standard": "^17.0.0",
+    "eslint-plugin-import": "^2.25.2",
+    "eslint-plugin-n": "^15.0.0",
+    "eslint-plugin-promise": "^6.0.0",
+    "glob": "^8.0.3",
+    "mocha": "^10.0.0",
+    "stream-browserify": "^3.0.0",
+    "ts-node": "^10.9.1",
+    "tsup": "^8.4.0",
+    "typescript": "^4.7.4"
+  }
+}

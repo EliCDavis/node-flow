@@ -856,6 +856,14 @@ export class FlowNode {
         this.#widgets.push(widget);
     }
 
+    removeWidget(widget: Widget): void {
+        const index = this.#widgets.indexOf(widget, 0);
+        if (index === -1) {
+            throw new Error("node does not contain widget");
+        }
+        this.#widgets.splice(index, 1);
+    }
+
     getWidget(index: number): Widget {
         return this.#widgets[index];
     }

@@ -404,6 +404,18 @@ export class NodeFlowGraph {
         this.#mainNoteSubsystem.addNote(note);
     }
 
+    removeNote(note: FlowNote): void {
+        this.#mainNoteSubsystem.removeNote(note);
+    }
+
+    removeAllNotes(): void {
+        this.#mainNoteSubsystem.removeAllNotes();
+    }
+
+    getNotes(): Array<FlowNote> {
+        return this.#mainNoteSubsystem.getNotes();
+    }
+
     public addOnNodeCreatedListener(callback: NodeCreatedCallback): void {
         this.#mainNodeSubsystem.addOnNodeCreatedListener(callback);
     }

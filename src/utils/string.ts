@@ -23,7 +23,7 @@ export function fitString(ctx: CanvasRenderingContext2D, str: string, maxWidth: 
 
     const index = binarySearch({
         max: str.length,
-        getValue: guess => ctx.measureText(str.substring(0, guess)).width,
+        getValue: (guess: number) => ctx.measureText(str.substring(0, guess)).width,
         match: maxWidth - ellipsisWidth,
     });
 
@@ -38,7 +38,7 @@ export function splitString(ctx: CanvasRenderingContext2D, str: string, maxWidth
 
     let index = binarySearch({
         max: str.length,
-        getValue: guess => ctx.measureText(str.substring(0, guess)).width,
+        getValue: (guess: number) => ctx.measureText(str.substring(0, guess)).width,
         match: maxWidth,
     });
 
@@ -64,7 +64,7 @@ export function splitStringIntoLines(ctx: CanvasRenderingContext2D, str: string,
     while (remaining !== "") {
         let index = binarySearch({
             max: remaining.length,
-            getValue: guess => ctx.measureText(remaining.substring(0, guess)).width,
+            getValue: (guess: number) => ctx.measureText(remaining.substring(0, guess)).width,
             match: maxWidth,
         });
 

@@ -164,6 +164,16 @@ node.addInput({ name: "c", type: "float32" })
 node.addOutput({ name: "sum", type: "float32" })
 ```
 
+### Note API
+
+```javascript
+note.setText("...");
+note.setPosition({ x, y });
+graph.removeNote(note);
+graph.removeAllNotes();
+graph.getNotes();
+```
+
 ## Library Development
 
 Just run

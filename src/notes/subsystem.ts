@@ -86,6 +86,10 @@ export class NoteSubsystem {
         }
     }
 
+    getNotes(): Array<FlowNote> {
+        return this.#notes;
+    }
+
     public addNoteAddedListener(callback: NoteAddedCallback): void {
         if (callback === null || callback === undefined) {
             return;
@@ -224,6 +228,19 @@ export class NoteSubsystem {
             }
         } else {
             console.error("no note found to remove");
+        }
+    }
+
+    removeAllNotes(): void {
+        const notes = this.#notes;
+        this.#notes = [];
+        this.#noteHovering = null;
+        this.#noteSelected = null;
+
+        for (let i = 0; i < notes.length; i++) {
+            for (let j = 0; j < this.#onNoteRemovedCallbacks.length; j++) {
+                this.#onNoteRemovedCallbacks[j](notes[i]);
+            }
         }
     }
 

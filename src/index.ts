@@ -7,8 +7,17 @@ export { Theme };
 import { Publisher, PublisherConfig } from './nodes/publisher';
 export { Publisher, PublisherConfig };
 
-import { FlowNote } from './notes/note';
-export { FlowNote };
+import { FlowNote, FlowNoteConfig, NoteContentChangeCallback, NoteWidthChangeCallback } from './notes/note';
+export { FlowNote, FlowNoteConfig, NoteContentChangeCallback, NoteWidthChangeCallback };
+
+import {
+    NoteAddedCallback, NoteDragStartCallback, NoteDragStopCallback,
+    NoteRemovedCallback, NoteSubsystemConfig
+} from './notes/subsystem';
+export {
+    NoteAddedCallback, NoteDragStartCallback, NoteDragStopCallback,
+    NoteRemovedCallback, NoteSubsystemConfig
+};
 
 // Widgets
 import { NumberWidget } from './widgets/number';

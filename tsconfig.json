@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "declaration": true, // Generate .d.ts declaration files
+        "sourceMap": true, // Generate source maps (optional)
+        "strict": true, // Enable strict type checking (optional)
+        "outDir": "./dist/js",
+        "target": "ES2015",
+    },
+    "include": [
+        "src/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}

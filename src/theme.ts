@@ -57,6 +57,7 @@ export const Theme = {
         BackgroundColor: "#07212A",
         HighlightColor: "#205A6D",
         FontColor: "#afb9bb",
+        DisabledFontColor: "#4a585c",
     },
     Note: {
         FontColor: "#afb9bb",

@@ -388,6 +388,20 @@ export class NodeSubsystem {
     }
 
     /**
+     * Returns currently selected nodes in stable graph order (same selection
+     * state used by Ctrl+click and box-select styling via FlowNode.selected()).
+     */
+    getSelectedNodes(): Array<FlowNode> {
+        const selected = new Array<FlowNode>();
+        for (let i = 0; i < this.#nodes.length; i++) {
+            if (this.#nodes[i].selected()) {
+                selected.push(this.#nodes[i]);
+            }
+        }
+        return selected;
+    }
+
+    /**
      * Returns all nodes who are connected to the inputs of the 
      * node in question
      * 

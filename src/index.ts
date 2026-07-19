@@ -1,6 +1,9 @@
 export * from './graph';
 export * from './node';
 
+import { ContextMenuConfig, ContextMenuItemConfig, ContextMenuItemState } from './contextMenu';
+export { ContextMenuConfig, ContextMenuItemConfig, ContextMenuItemState };
+
 import { Theme } from './theme';
 export { Theme };
 

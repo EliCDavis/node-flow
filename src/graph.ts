@@ -380,6 +380,14 @@ export class NodeFlowGraph {
         return this.#mainNodeSubsystem.getNodes();
     }
 
+    /**
+     * Returns currently selected nodes in stable graph order (same selection
+     * state used by Ctrl+click and box-select styling via FlowNode.selected()).
+     */
+    getSelectedNodes(): Array<FlowNode> {
+        return this.#mainNodeSubsystem.getSelectedNodes();
+    }
+
     connectedInputsNodeReferences(nodeIndex: number): Array<FlowNode> {
         return this.#mainNodeSubsystem.connectedInputsNodeReferencesByIndex(nodeIndex);
     }

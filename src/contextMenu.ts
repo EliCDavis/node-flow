@@ -8,10 +8,23 @@ import { CopyVector2, Vector2, Zero } from './types/vector2';
 const contextEntryHeight = 30;
 const contextEntryWidth = 250;
 
+export enum ContextMenuItemState {
+    Enabled = 0,
+    Disabled = 1,
+    Hidden = 2,
+}
+
 export interface ContextMenuItemConfig {
     name?: string;
     textStyle?: TextStyleConfig;
     group?: string;
+
+    /**
+     * Evaluated when the menu is opened. Defaults to Enabled when omitted.
+     * Hidden items are omitted from the menu; Disabled items are shown muted
+     * and are not clickable.
+     */
+    enabled?: () => ContextMenuItemState;
 
     callback?: () => void;
 }
@@ -33,6 +46,8 @@ export class ContextMenuItem {
 
     #textStyle: TextStyle;
 
+    #state: ContextMenuItemState;
+
     public group?: string;
 
     constructor(config?: ContextMenuItemConfig) {
@@ -40,14 +55,21 @@ export class ContextMenuItem {
         this.#callback = config?.callback;
         this.#textStyle = new TextStyle(config?.textStyle);
         this.group = config?.group;
+        this.#state = config?.enabled === undefined
+            ? ContextMenuItemState.Enabled
+            : config.enabled();
     }
 
     getName(): string {
         return this.#name;
     }
 
+    state(): ContextMenuItemState {
+        return this.#state;
+    }
+
     execute(): void {
-        if (this.#callback === undefined) {
+        if (this.#state !== ContextMenuItemState.Enabled || this.#callback === undefined) {
             return;
         }
         this.#callback();
@@ -136,7 +158,11 @@ export class ContextMenu {
 
         if (config?.items !== undefined) {
             for (let i = 0; i < config?.items.length; i++) {
-                this.#items.push(new ContextMenuItem(config?.items[i]));
+                const item = new ContextMenuItem(config?.items[i]);
+                if (item.state() === ContextMenuItemState.Hidden) {
+                    continue;
+                }
+                this.#items.push(item);
             }
         }
 
@@ -312,7 +338,10 @@ export class ContextMenu {
                     }
                 }
 
-                if (entryMousedOver || (this.#openSubMenu !== undefined && entry.subMenu === this.#openSubMenu)) {
+                const itemDisabled = entry.item !== undefined
+                    && entry.item.state() === ContextMenuItemState.Disabled;
+
+                if (!itemDisabled && (entryMousedOver || (this.#openSubMenu !== undefined && entry.subMenu === this.#openSubMenu))) {
                     ctx.fillStyle = Theme.ContextMenu.HighlightColor;
                     ctx.beginPath();
                     ctx.roundRect(
@@ -326,6 +355,9 @@ export class ContextMenu {
                 }
 
                 this.#textStyle.setupStyle(ctx, menuScale);
+                if (itemDisabled) {
+                    ctx.fillStyle = Theme.ContextMenu.DisabledFontColor;
+                }
                 ctx.fillText(entry.text, position.x + (scaledEntryHeight / 5), this.#tempBox.Position.y + (scaledEntryHeight / 2))
 
                 // Render arrows

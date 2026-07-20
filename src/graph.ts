@@ -195,9 +195,9 @@ export class NodeFlowGraph {
         this.#contextMenuConfig = CombineContextMenus({
             items: [
                 {
-                    name: "Reset View",
+                    name: "Center on Graph",
                     group: contextMenuGroup,
-                    callback: this.#camera.reset.bind(this.#camera)
+                    callback: this.centerOnGraph.bind(this)
                 },
             ],
         }, config?.contextMenu);
@@ -222,23 +222,18 @@ export class NodeFlowGraph {
 
         window.requestAnimationFrame(this.#render.bind(this));
 
-        this.#canvas.addEventListener('wheel', (event) => {
-            event.preventDefault();
-            this.zoom(Math.sign(event.deltaY));
-        }, false);
-
         new MouseObserver(this.#canvas,
             this.#mouseDragEvent.bind(this),
-
-            // Mouse move event
             (mousePosition) => {
                 this.#mousePosition = mousePosition;
             },
-
             this.#clickStart.bind(this),
             this.#clickEnd.bind(this),
             this.#openContextMenu.bind(this),
-            this.#fileDrop.bind(this)
+            this.#fileDrop.bind(this),
+            (amount, anchor) => {
+                this.zoom(amount, anchor);
+            }
         );
 
         document.addEventListener(
@@ -331,20 +326,25 @@ export class NodeFlowGraph {
     }
 
 
-    zoom(amount: number): void {
+    zoom(amount: number, anchor?: Vector2): void {
+        const anchorPos = anchor ?? this.#mousePosition;
 
         let oldPos: Vector2 | undefined = undefined;
-        if (this.#mousePosition) {
-            oldPos = this.#sceenPositionToGraphPosition(this.#mousePosition);;
+        if (anchorPos !== undefined) {
+            oldPos = this.#sceenPositionToGraphPosition(anchorPos);
         }
 
         this.#camera.zoom += amount * this.#camera.zoom * 0.05;
 
-        if (!oldPos || !this.#mousePosition) {
+        if (!oldPos || anchorPos === undefined) {
             return;
         }
-        // Attempt zoom around where the current mouse is.
-        const newPos = this.#sceenPositionToGraphPosition(this.#mousePosition);
+
+        if (anchor !== undefined) {
+            this.#mousePosition = anchor;
+        }
+
+        const newPos = this.#sceenPositionToGraphPosition(anchorPos);
         this.#camera.position.x += (newPos.x - oldPos.x) * this.#camera.zoom;
         this.#camera.position.y += (newPos.y - oldPos.y) * this.#camera.zoom;
     }
@@ -386,6 +386,62 @@ export class NodeFlowGraph {
      */
     getSelectedNodes(): Array<FlowNode> {
         return this.#mainNodeSubsystem.getSelectedNodes();
+    }
+
+    /**
+     * Adjusts camera position and zoom so all nodes fit in view (~10% padding).
+     * Falls back to camera.reset() when there are no nodes.
+     */
+    centerOnGraph(): void {
+        const nodes = this.getNodes();
+        if (nodes.length === 0) {
+            this.#camera.reset();
+            return;
+        }
+
+        // Identity camera so calculateBounds returns graph-space sizes.
+        const measureCamera = new Camera();
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+
+        for (let i = 0; i < nodes.length; i++) {
+            const bounds = nodes[i].calculateBounds(this.#ctx, measureCamera);
+            minX = Math.min(minX, bounds.Position.x);
+            minY = Math.min(minY, bounds.Position.y);
+            maxX = Math.max(maxX, bounds.Position.x + bounds.Size.x);
+            maxY = Math.max(maxY, bounds.Position.y + bounds.Size.y);
+        }
+
+        let width = maxX - minX;
+        let height = maxY - minY;
+        if (width <= 0 || height <= 0) {
+            this.#camera.reset();
+            return;
+        }
+
+        const padX = width * 0.05;
+        const padY = height * 0.05;
+        minX -= padX;
+        minY -= padY;
+        width += padX * 2;
+        height += padY * 2;
+
+        const canvasWidth = this.#canvas.clientWidth;
+        const canvasHeight = this.#canvas.clientHeight;
+        if (canvasWidth <= 0 || canvasHeight <= 0) {
+            this.#camera.reset();
+            return;
+        }
+
+        const zoom = Math.min(canvasWidth / width, canvasHeight / height);
+        const centerX = minX + width / 2;
+        const centerY = minY + height / 2;
+
+        this.#camera.zoom = zoom;
+        this.#camera.position.x = canvasWidth / 2 - centerX * zoom;
+        this.#camera.position.y = canvasHeight / 2 - centerY * zoom;
     }
 
     connectedInputsNodeReferences(nodeIndex: number): Array<FlowNode> {
@@ -454,26 +510,6 @@ export class NodeFlowGraph {
             Position: contextMenuPosition,
         };
     }
-
-
-    // Somethings wrong here. Needs more testing
-    // #fitView(): void {
-    //     if (this.#nodes.length === 0) {
-    //         return;
-    //     }
-
-    //     const curBox: Box = {
-    //         Position: { x: 0, y: 0 },
-    //         Size: { x: 0, y: 0 }
-    //     };
-    //     CopyBox(curBox, this.#nodes[0].calculateBounds(this.#ctx, this.#graphState.position, this.#graphState.scale));
-
-    //     for (let i = 1; i < this.#nodes.length; i++) {
-    //         ExpandBox(curBox, this.#nodes[i].calculateBounds(this.#ctx, this.#graphState.position, this.#graphState.scale));
-    //     }
-
-    //     CopyVector2(this.#graphState.position, curBox.Position);
-    // }
 
     #clickEnd(): void {
         this.currentView().clickEnd();

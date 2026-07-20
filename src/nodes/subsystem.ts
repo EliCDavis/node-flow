@@ -94,6 +94,8 @@ export class NodeSubsystem {
 
     #boxSelectStyle: BoxStyle;
 
+    #lastCtx: CanvasRenderingContext2D | null;
+
     // LISTENERS ==============================================================
 
     #nodeRemovedCallbacks: Array<NodeRemovedCallback>;
@@ -122,6 +124,7 @@ export class NodeSubsystem {
         this.#boxSelectStart_graphSpace = Zero();
         this.#boxSelectEnd_graphSpace = Zero();
         this.#boxSelectionNodes = new List<number>();
+        this.#lastCtx = null;
         this.#boxSelectStyle = new BoxStyle({
             border: {
                 color: Theme.BoxSelect.Color,
@@ -160,6 +163,31 @@ export class NodeSubsystem {
 
     clickStart(mousePosition: Vector2, camera: Camera, ctrlKey: boolean): boolean {
         this.#boxSelect = false;
+        this.#nodesGrabbed.Clear();
+
+        // Touch has no continuous hover — hit-test at the click position.
+        if (this.#lastCtx !== null) {
+            this.#portHovering = null;
+            this.#widgetHovering = null;
+            this.#nodeHovering = -1;
+            for (let i = 0; i < this.#nodes.length; i++) {
+                const intersection = this.#nodes[i].inBounds(this.#lastCtx, camera, mousePosition);
+                if (intersection.Node !== undefined && intersection.PortIndex === undefined && intersection.Widget === undefined) {
+                    this.#nodeHovering = i;
+                }
+                if (intersection.Widget !== undefined) {
+                    this.#widgetHovering = intersection.Widget;
+                }
+                if (intersection.Port !== undefined && intersection.Node !== undefined && intersection.PortIndex !== undefined && intersection.PortIsInput !== undefined) {
+                    this.#portHovering = {
+                        Index: intersection.PortIndex,
+                        Node: intersection.Node,
+                        Port: intersection.Port,
+                        InputPort: intersection.PortIsInput
+                    };
+                }
+            }
+        }
 
         let hoveringSomething = false;
         if (this.#nodeHovering > -1) {
@@ -761,6 +789,7 @@ export class NodeSubsystem {
     }
 
     render(ctx: CanvasRenderingContext2D, camera: Camera, mousePosition: Vector2 | undefined): RenderResults | undefined {
+        this.#lastCtx = ctx;
         this.#cursor = CursorStyle.Default;
         TimeExecution("Render_Connections", () => {
             this.#renderConnections(ctx, camera, mousePosition);

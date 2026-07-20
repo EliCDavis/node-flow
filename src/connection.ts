@@ -2,6 +2,7 @@ import { FlowNode } from "./node";
 import { Port } from "./port";
 import { BoxCenter, InBox } from "./types/box";
 import { Vector2, Zero } from "./types/vector2";
+import { Clamp01 } from "./utils/math";
 
 export interface ConnectionRendererParams {
     ctx: CanvasRenderingContext2D;
@@ -17,6 +18,16 @@ export interface ConnectionRendererParams {
 }
 
 export type ConnectionRenderer = (params: ConnectionRendererParams) => void
+
+/** Horizontal stub (screen px) at full strength on each port when output is right of input. */
+const BACKWARD_PORT_STUB = 30;
+/** Screen px of output-over-input overlap over which stubs ramp from 0 to full. */
+const BACKWARD_STUB_RAMP = 80;
+
+function smoothstep(t: number): number {
+    const x = Clamp01(t);
+    return x * x * (3 - 2 * x);
+}
 
 export function DefaultConnectionRenderer(connectionSize: number, connectionColor: string | undefined, mouseOverSize: number, mouseOverColor: string | undefined): ConnectionRenderer {
     return (params: ConnectionRendererParams) => {
@@ -47,11 +58,29 @@ export function DefaultConnectionRenderer(connectionSize: number, connectionColo
         params.ctx.strokeStyle = color;
         params.ctx.lineWidth = lineSize;
 
-        // Draw
+        // start = input port, end = output port
+        const inX = params.start.x;
+        const inY = params.start.y;
+        const outX = params.end.x;
+        const outY = params.end.y;
+
+        const overlap = outX - inX;
+        const fullStub = BACKWARD_PORT_STUB * params.graphScale;
+        const ramp = BACKWARD_STUB_RAMP * params.graphScale;
+        const stub = overlap <= 0 ? 0 : fullStub * smoothstep(overlap / ramp);
+        const curveStartX = inX - stub;
+        const curveEndX = outX + stub;
+
         params.ctx.beginPath();
-        params.ctx.moveTo(params.start.x, params.start.y);
-        const midX = (params.start.x + params.end.x) / 2;
-        params.ctx.bezierCurveTo(midX, params.start.y, midX, params.end.y, params.end.x, params.end.y);
+        params.ctx.moveTo(inX, inY);
+        if (stub > 0) {
+            params.ctx.lineTo(curveStartX, inY);
+        }
+        const midX = (curveStartX + curveEndX) / 2;
+        params.ctx.bezierCurveTo(midX, inY, midX, outY, curveEndX, outY);
+        if (stub > 0) {
+            params.ctx.lineTo(outX, outY);
+        }
         params.ctx.stroke();
         params.ctx.shadowBlur = 0;
     }

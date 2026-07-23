@@ -14,7 +14,8 @@ import { ConnectionRendererConfiguration, NodeAddedCallback, NodeRemovedCallback
 import { Connection } from './connection';
 import { Publisher } from './nodes/publisher';
 import { VectorPool } from './types/pool';
-import { Camera } from './camera';
+import { Camera, CameraOrientation } from './camera';
+export { CameraOrientation };
 import { PassSubsystem } from './pass/subsystem';
 import { QuickMenu } from './quickMenu';
 
@@ -386,6 +387,20 @@ export class NodeFlowGraph {
      */
     getSelectedNodes(): Array<FlowNode> {
         return this.#mainNodeSubsystem.getSelectedNodes();
+    }
+
+    /**
+     * Returns a copy of the current camera orientation (screen-space pan + zoom).
+     */
+    getCamera(): CameraOrientation {
+        return this.#camera.getOrientation();
+    }
+
+    /**
+     * Restores a previously saved camera orientation.
+     */
+    setCamera(orientation: CameraOrientation): void {
+        this.#camera.setOrientation(orientation);
     }
 
     /**

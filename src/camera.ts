@@ -1,5 +1,11 @@
 import { Vector2, Zero } from "./types/vector2";
 
+/** Serializable camera orientation for save/restore. */
+export interface CameraOrientation {
+    position: Vector2;
+    zoom: number;
+}
+
 export class Camera {
 
     zoom: number;
@@ -20,6 +26,22 @@ export class Camera {
     graphSpaceToScreenSpace(graphPosition: Vector2, out: Vector2): void {
         out.x = this.position.x + (graphPosition.x * this.zoom);
         out.y = this.position.y + (graphPosition.y * this.zoom);
+    }
+
+    getOrientation(): CameraOrientation {
+        return {
+            position: {
+                x: this.position.x,
+                y: this.position.y,
+            },
+            zoom: this.zoom,
+        };
+    }
+
+    setOrientation(orientation: CameraOrientation): void {
+        this.position.x = orientation.position.x;
+        this.position.y = orientation.position.y;
+        this.zoom = orientation.zoom;
     }
 
     reset(): void {

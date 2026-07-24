@@ -404,6 +404,13 @@ export class NodeFlowGraph {
     }
 
     /**
+     * Resets the camera to the default orientation (origin, zoom 1).
+     */
+    resetCamera(): void {
+        this.#camera.reset();
+    }
+
+    /**
      * Adjusts camera position and zoom so all nodes fit in view (~10% padding).
      * Falls back to camera.reset() when there are no nodes.
      */

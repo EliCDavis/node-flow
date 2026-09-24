@@ -1,4 +1,10 @@
-const binarySearch = ({ max, getValue, match }) => {
+interface BinarySearch {
+    max: number;
+    getValue: (guess: number) => number;
+    match: number;
+}
+
+const binarySearch = ({ max, getValue, match }: BinarySearch): number => {
     let min = 0;
 
     while (min <= max) {

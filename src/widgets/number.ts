@@ -3,7 +3,7 @@ import { Popup } from "../popup";
 import { TextBoxStyle, TextBoxStyleConfig, TextBoxStyleWithFallback } from "../styles/textBox";
 import { Box, InBox } from '../types/box';
 import { CopyVector2, Vector2 } from "../types/vector2";
-import { height, width } from "./widget";
+import { height, startingWidgetValue, width } from "./widget";
 import { FlowNode } from "../node";
 
 export interface NumberWidgetConfig {
@@ -62,8 +62,8 @@ export class NumberWidget {
             },
             text: { color: Theme.Widget.FontColor },
         }));
-        this.Set(config?.value === undefined ? 0 : config?.value);
         this.#callback = config?.callback;
+        this.Set(startingWidgetValue(node, this.#nodeProperty, config?.value, 0));
 
         if (this.#nodeProperty !== undefined) {
             this.#node.addPropertyChangeListener(this.#nodeProperty, (oldVal, newVal) => {

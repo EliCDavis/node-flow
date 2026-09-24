@@ -22,19 +22,45 @@ export {
     NoteRemovedCallback, NoteSubsystemConfig
 };
 
+// Ports
+import { Port, PortConfig, PortStyle, PortType, portsCompatible } from './port';
+export { Port, PortConfig, PortStyle, PortType, portsCompatible };
+
+// Connections
+import {
+    Connection, ConnectionRenderer, ConnectionRendererParams, DefaultConnectionRenderer
+} from './connection';
+export { Connection, ConnectionRenderer, ConnectionRendererParams, DefaultConnectionRenderer };
+
+// Node factory
+import { NodeCreatedCallback, NodeFactory, NodeFactoryConfig } from './nodes/factory';
+export { NodeCreatedCallback, NodeFactory, NodeFactoryConfig };
+
 // Widgets
-import { NumberWidget } from './widgets/number';
-import { ColorWidget } from './widgets/color';
-import { StringWidget } from './widgets/string';
-import { TextWidget } from './widgets/text';
-import { ButtonWidget } from './widgets/button';
-import { ToggleWidget } from './widgets/toggle';
-import { SliderWidget } from './widgets/slider';
-import { ImageWidget } from './widgets/image';
+import { Widget } from './widgets/widget';
+import { NumberWidget, NumberWidgetConfig } from './widgets/number';
+import { ColorWidget, ColorWidgetConfig } from './widgets/color';
+import { StringWidget, StringWidgetConfig } from './widgets/string';
+import { TextWidget, TextWidgetConfig } from './widgets/text';
+import { ButtonWidget, ButtonWidgetConfig } from './widgets/button';
+import { ToggleWidget, ToggleWidgetConfig, ToggleStyleConfig } from './widgets/toggle';
+import { SliderWidget, SliderWidgetConfig } from './widgets/slider';
+import { ImageWidget, ImageWidgetConfig } from './widgets/image';
 export {
+    Widget,
     NumberWidget, ColorWidget, StringWidget, TextWidget,
     ButtonWidget, ToggleWidget, SliderWidget, ImageWidget
 };
+export type {
+    NumberWidgetConfig, ColorWidgetConfig, StringWidgetConfig, TextWidgetConfig,
+    ButtonWidgetConfig, ToggleWidgetConfig, ToggleStyleConfig, SliderWidgetConfig,
+    ImageWidgetConfig
+};
 
-import { GlobalWidgetFactory } from './widgets/factory';
-export { GlobalWidgetFactory };
+import { GlobalWidgetFactory, WidgetBuilder, WidgetFactory } from './widgets/factory';
+export { GlobalWidgetFactory, WidgetFactory };
+export type { WidgetBuilder };
+
+import { Box } from './types/box';
+import { Vector2 } from './types/vector2';
+export type { Box, Vector2 };

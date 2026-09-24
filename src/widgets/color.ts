@@ -2,7 +2,7 @@ import { HexToColor } from "../utils/color";
 import { TextStyleConfig } from "../styles/text";
 import { Box } from "../types/box";
 import { CopyVector2, Vector2 } from "../types/vector2";
-import { height, width } from "./widget";
+import { height, startingWidgetValue, width } from "./widget";
 import { Popup } from "../popup";
 import { TextBoxStyle } from '../styles/textBox';
 import { Theme } from "../theme";
@@ -46,12 +46,12 @@ export class ColorWidget {
     #callback?: (newColor: string) => void;
 
     constructor(node: FlowNode, config?: ColorWidgetConfig) {
-        this.#value = "#000000"
-        this.#contrast = contrastColor(this.#value);
-        this.Set(config?.value === undefined ? "#000000" : config?.value);
-        
         this.#node = node;
         this.#nodeProperty = config?.property;
+        this.#callback = config?.callback;
+
+        this.#value = startingWidgetValue(node, this.#nodeProperty, config?.value, "#000000");
+        this.#contrast = contrastColor(this.#value);
         this.#textBoxStyle = new TextBoxStyle({
             box: {
                 color: this.#value,
@@ -62,7 +62,6 @@ export class ColorWidget {
             },
             text: config?.textStyle
         });
-        this.#callback = config?.callback;
 
         if (this.#nodeProperty !== undefined) {
             this.#node.addPropertyChangeListener(this.#nodeProperty, (oldVal, newVal) => {

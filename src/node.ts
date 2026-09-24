@@ -856,6 +856,11 @@ export class FlowNode {
         this.#widgets.push(widget);
     }
 
+    insertWidget(index: number, widget: Widget): void {
+        const at = Math.max(0, Math.min(index, this.#widgets.length));
+        this.#widgets.splice(at, 0, widget);
+    }
+
     removeWidget(widget: Widget): void {
         const index = this.#widgets.indexOf(widget, 0);
         if (index === -1) {
@@ -864,8 +869,38 @@ export class FlowNode {
         this.#widgets.splice(index, 1);
     }
 
+    removeWidgetAt(index: number): Widget | undefined {
+        if (index < 0 || index >= this.#widgets.length) {
+            return undefined;
+        }
+        return this.#widgets.splice(index, 1)[0];
+    }
+
+    moveWidget(from: number, to: number): void {
+        if (from < 0 || from >= this.#widgets.length) {
+            return;
+        }
+        if (to < 0 || to >= this.#widgets.length || from === to) {
+            return;
+        }
+        const [widget] = this.#widgets.splice(from, 1);
+        this.#widgets.splice(to, 0, widget);
+    }
+
+    clearWidgets(): void {
+        this.#widgets.length = 0;
+    }
+
     getWidget(index: number): Widget {
         return this.#widgets[index];
+    }
+
+    widgets(): ReadonlyArray<Widget> {
+        return this.#widgets;
+    }
+
+    indexOfWidget(widget: Widget): number {
+        return this.#widgets.indexOf(widget, 0);
     }
 
     widgetCount(): number {

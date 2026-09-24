@@ -4,7 +4,7 @@ import { TextStyle, TextStyleConfig, TextStyleFallback } from "../styles/text";
 import { Box } from '../types/box';
 import { CopyVector2, Vector2, Zero } from "../types/vector2";
 import { Clamp, Clamp01 } from "../utils/math";
-import { height, width } from "./widget";
+import { height, startingWidgetValue, width } from "./widget";
 import { TextBaseline } from "../styles/canvasTextBaseline";
 import { FlowNode } from "../node";
 
@@ -104,7 +104,7 @@ export class SliderWidget {
             });
         }
 
-        this.SetValue(config?.value === undefined ? 0 : config?.value);
+        this.SetValue(startingWidgetValue(node, this.#nodeProperty, config?.value, 0));
 
         // Setup change callback after we set the initial value to prevent the callback from being 
         this.#change = config?.change;

@@ -32,10 +32,12 @@ export class Text {
         this.#lineSpacing = config?.LineSpacing ? config?.LineSpacing : 5;
         this.#textToRender = [value];
 
-        if (!document.fonts.check(`16px "${this.#style.getFont()}"`)) {
-            document.fonts.addEventListener("loadingdone", (event) => {
-                this.#measured = false;
-            });
+        if (typeof document !== "undefined" && document.fonts !== undefined) {
+            if (!document.fonts.check(`16px "${this.#style.getFont()}"`)) {
+                document.fonts.addEventListener("loadingdone", () => {
+                    this.#measured = false;
+                });
+            }
         }
     }
 

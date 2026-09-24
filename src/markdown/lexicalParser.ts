@@ -37,32 +37,27 @@ export class MarkdownLexicalParser {
         return this.#body.charAt(this.#index);
     }
 
-    #lastToken = 0;
-    
-    #addToken(token: MarkdownTokenType, lexeme: string): void {
-        this.#tokens.push(new MarkdownToken(token, lexeme, this.#lastToken, this.#index));
-        this.#lastToken = this.#index;
+    #tokenStart = 0;
+
+    #addToken(token: MarkdownTokenType, lexeme: string, start?: number): void {
+        this.#tokens.push(new MarkdownToken(token, lexeme, start ?? this.#tokenStart, this.#index));
     }
 
-    #h2(): void {
-        let char = this.#next();
-        if (char === "#") {
-            this.#addToken(MarkdownTokenType.H3, "###");
-
-            // Move it off the character for the next reading
+    #header(): void {
+        let count = 0;
+        while (this.#current() === "#") {
+            count++;
             this.#inc();
-        } else {
-            this.#addToken(MarkdownTokenType.H2, "##");
         }
-    }
 
-    #h1(): void {
-        let char = this.#next();
-        if (char === "#") {
-            this.#h2();
-        } else {
-            this.#addToken(MarkdownTokenType.H1, "#");
+        let type = MarkdownTokenType.H3;
+        if (count === 1) {
+            type = MarkdownTokenType.H1;
+        } else if (count === 2) {
+            type = MarkdownTokenType.H2;
         }
+
+        this.#addToken(type, "#".repeat(count));
     }
 
     #whiteSpace(): void {
@@ -110,34 +105,29 @@ export class MarkdownLexicalParser {
         }
 
         if (started != -1) {
-            this.#addToken(MarkdownTokenType.Text, this.#body.substring(started, this.#index))
+            this.#addToken(MarkdownTokenType.Text, this.#body.substring(started, this.#index), started)
         }
     }
 
-    // S( ) => S
-    // S(\t) => S
-    // S(#) => H1
-    // H1(#) => H2
-    // H1(!#) => S
-    // H2(#) => H3
-    // H2(#) => H3
     parse(): void {
         let char = this.#current();
 
         while (char !== "") {
+            this.#tokenStart = this.#index;
+
             if (char === " " || char === "\t") {
                 this.#whiteSpace();
             } else if (char === "#") {
-                this.#h1();
+                this.#header();
             } else if (char === "\n") {
+                this.#inc();
                 this.#addToken(MarkdownTokenType.NewLine, "\n");
-                this.#inc();
             } else if (char === "*") {
+                this.#inc();
                 this.#addToken(MarkdownTokenType.Star, "*");
-                this.#inc();
             } else if (char === "`") {
-                this.#addToken(MarkdownTokenType.BackTick, "`");
                 this.#inc();
+                this.#addToken(MarkdownTokenType.BackTick, "`");
             } else {
                 this.#text();
             }

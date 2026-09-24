@@ -65,6 +65,14 @@ export class TextStyle {
         return this.#font;
     }
 
+    getWeight(): FontWeight {
+        return this.#weight;
+    }
+
+    getStyle(): FontStyle {
+        return this.#fontStyle;
+    }
+
     measure(ctx: CanvasRenderingContext2D, scale: number, text: string, out: Vector2): void {
         this.setupStyle(ctx, scale);
         const measurements = ctx.measureText(text)

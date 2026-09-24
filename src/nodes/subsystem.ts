@@ -6,7 +6,7 @@ import { FlowNode, NodeState } from "../node";
 import { Organize } from "../organize";
 import { PassSubsystem } from "../pass/subsystem";
 import { TimeExecution } from "../performance";
-import { Port, PortType } from "../port";
+import { Port, PortType, portsCompatible } from "../port";
 import { BoxStyle } from "../styles/box";
 import { CursorStyle } from "../styles/cursor";
 import { Theme } from "../theme";
@@ -341,13 +341,13 @@ export class NodeSubsystem {
         }
 
         // Different types, can't connect
-        if (this.#portHovering.InputPort && this.#portHovering.Port.getDataType() !== conn.outPort()?.getDataType()) {
+        if (this.#portHovering.InputPort && !portsCompatible(this.#portHovering.Port, conn.outPort())) {
             this.#clearCurrentlySelectedConnection();
             return;
         }
 
         // Different types, can't connect
-        if (!this.#portHovering.InputPort && this.#portHovering.Port.getDataType() !== conn.inPort()?.getDataType()) {
+        if (!this.#portHovering.InputPort && !portsCompatible(this.#portHovering.Port, conn.inPort())) {
             this.#clearCurrentlySelectedConnection();
             return;
         }
@@ -377,10 +377,10 @@ export class NodeSubsystem {
     }
 
     connectNodes(nodeOut: FlowNode, outPort: number, nodeIn: FlowNode, inPort: number): Connection | undefined {
-        const outType = nodeOut.outputPort(outPort).getDataType();
-        const inType = nodeIn.inputPort(inPort).getDataType();
-        if (outType !== inType) {
-            console.error("can't connect nodes of different types", outType, inType);
+        const from = nodeOut.outputPort(outPort);
+        const to = nodeIn.inputPort(inPort);
+        if (!portsCompatible(from, to)) {
+            console.error("can't connect nodes of different types", from.getDataType(), to.getDataType());
             return;
         }
 

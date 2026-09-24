@@ -1,7 +1,7 @@
 import { Theme } from "../theme";
 import { Box, InBox } from "../types/box";
 import { CopyVector2, Vector2 } from "../types/vector2";
-import { height, width } from "./widget";
+import { height, startingWidgetValue, width } from "./widget";
 import { TextBoxStyle, TextBoxStyleConfig, TextBoxStyleWithFallback } from "../styles/textBox";
 import { FlowNode } from "../node";
 
@@ -159,8 +159,8 @@ export class ToggleWidget {
             lightColor: config?.disabledStyle?.lightColor === undefined ? "#004400" : config?.enabledStyle?.lightColor,
         });
 
-        this.Set(config?.value === undefined ? false : config?.value);
         this.#callback = config?.callback;
+        this.Set(startingWidgetValue(node, this.#nodeProperty, config?.value, false));
         if (this.#nodeProperty !== undefined) {
             this.#node.addPropertyChangeListener(this.#nodeProperty, (oldVal, newVal) => {
                 this.Set(newVal);

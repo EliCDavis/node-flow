@@ -31,21 +31,18 @@ export class MarkdownSyntaxParser {
 
     #next(): MarkdownToken | null {
         this.#index++
-        if (this.#index >= this.#tokens.length - 1) {
+        if (this.#index >= this.#tokens.length) {
             return null
         }
         return this.#tokens[this.#index];
     }
 
     #peak(): MarkdownToken | null {
-        if (this.#index + 1 >= this.#tokens.length - 1) {
-            return null
-        }
-        return this.#tokens[this.#index + 1];
+        return this.#peakInto(1);
     }
 
     #peakInto(amount: number): MarkdownToken | null {
-        if (this.#index + amount >= this.#tokens.length - 1) {
+        if (this.#index + amount >= this.#tokens.length) {
             return null
         }
         return this.#tokens[this.#index + amount];
@@ -53,82 +50,107 @@ export class MarkdownSyntaxParser {
 
     #emphasis(): Array<Text> {
 
-        // Cases to consider
-        // =================
-        // 1.  *a*:      <i>a</i>
-        // 2.  **a**:    <b>a</b>
-        // 3.  **a*:     *<i>a</i> <----- fuck this one
-        // 4.  ***a**:   *<b>a</b> <----- fuck this one
-        // 5.  *a**:     <i>a</i>*
-        // 6.  **a***:   <b>a</b>*
-        // 7.  * a *:    * a *
-        // 8.  ** a **:  ** a **
-        // 9.  **a **:   **a **
-        // 10. **a f**:  <b>a f<b>
-        // 11. * Test:   <ul>Test</ul> 
+        // Count the stars either side of the content and match as many as
+        // both ends can supply; the rest stay on the line as characters.
+        //
+        // *a*     -> <i>a</i>          **a*    -> *<i>a</i>
+        // **a**   -> <b>a</b>          *a**    -> <i>a</i>*
+        // **a f** -> <b>a f</b>        *a      -> *a
+        // ** a ** -> ** a **           **a **  -> **a **
 
-        let token = this.#next();
-        if (token?.type() === MarkdownTokenType.Space) {
+        // A star with a space after it opens nothing, so leave the space
+        // where it is rather than consuming it - the caller still has to
+        // read it as part of the line.
+        if (this.#peak()?.type() === MarkdownTokenType.Space) {
             return [new Text("*")];
         }
 
-        let bold = false;
-        // Read off all leading stars
-        while (token !== null && token.type() === MarkdownTokenType.Star) {
-            bold = true;
-            token = this.#next();
-        }
+        const openers = this.#runOfStars();
 
-        let textContent = "";
-
-        let boldClosed = false;
-        let startingClose = false;
-        let validClose = false;
-        while (token !== null && token.type() !== MarkdownTokenType.NewLine) {
-            if (token.type() === MarkdownTokenType.Star) {
-
-                // This is the second star we've seen in a row. We're done!
-                if (startingClose) {
-                    boldClosed = true;
-                    break;
-                }
-
-                // If we're not bold, we just need a single star to close this off.
-                startingClose = true;
-                if (bold === false) {
-                    break;
-                }
-            }
-
-            if (startingClose && token.type() !== MarkdownTokenType.Star) {
+        let content = "";
+        let closers = 0;
+        while (true) {
+            const token = this.#current();
+            if (token === null || token.type() === MarkdownTokenType.NewLine) {
                 break;
             }
-
-            // Add to string content...
-            if (token.type() === MarkdownTokenType.Text) {
-                textContent += token.lexeme();
-                validClose = true;
+            if (token.type() === MarkdownTokenType.Star) {
+                closers = this.#runOfStars();
+                break;
             }
-
-            if (token.type() === MarkdownTokenType.Space) {
-                textContent += token.lexeme();
-                validClose = false;
-            }
-
-            token = this.#next();
+            content += token.lexeme();
+            this.#inc();
         }
 
-        const style: TextStyleConfig = {}
+        // Leave the reader on the last token taken, since the caller steps
+        // forward once more before looking at anything.
+        this.#index--;
 
-        if (validClose && startingClose) {
-            if (boldClosed) {
-                style.weight = FontWeight.Bold;
-            } else {
-                style.style = FontStyle.Italic;
-            }
+        // A run of stars only emphasises what it hugs. With a space against
+        // the inside of either end, or nothing between them at all, the
+        // stars are just stars.
+        const hugsContent = content !== ""
+            && content.trimStart() === content
+            && content.trimEnd() === content;
+
+        const matched = hugsContent ? Math.min(openers, closers) : 0;
+        if (matched === 0) {
+            return [new Text("*".repeat(openers) + content + "*".repeat(closers))];
         }
 
-        return [new Text(textContent, style)]
+        const style: TextStyleConfig = {};
+        if (matched >= 2) {
+            style.weight = FontWeight.Bold;
+        } else {
+            style.style = FontStyle.Italic;
+        }
+
+        // Stars past the pair that matched were never part of the emphasis,
+        // so they stay on the line as the characters they are.
+        const runs = new Array<Text>();
+        if (openers > matched) {
+            runs.push(new Text("*".repeat(openers - matched)));
+        }
+        runs.push(new Text(content, style));
+        if (closers > matched) {
+            runs.push(new Text("*".repeat(closers - matched)));
+        }
+        return runs;
+    }
+
+    /** Consumes a run of stars, leaving the reader on the token after it. */
+    #runOfStars(): number {
+        let count = 0;
+        while (this.#current()?.type() === MarkdownTokenType.Star) {
+            count++;
+            this.#inc();
+        }
+        return count;
+    }
+
+    /**
+     * Reads `code` up to the closing backtick on the same line. An opening
+     * backtick with no partner is only a backtick.
+     */
+    #inlineCode(): Array<Text> {
+        const opened = this.#index;
+
+        this.#inc();
+        let content = "";
+        while (true) {
+            const token = this.#current();
+            if (token === null || token.type() === MarkdownTokenType.NewLine) {
+                this.#index = opened;
+                return [new Text("`")];
+            }
+            if (token.type() === MarkdownTokenType.BackTick) {
+                break;
+            }
+            content += token.lexeme();
+            this.#inc();
+        }
+
+        return [new Text(content, { font: "monospace" })];
     }
 
     #text(): Array<Text> {
@@ -153,13 +175,16 @@ export class MarkdownSyntaxParser {
                     break;
 
                 case MarkdownTokenType.Star:
+                case MarkdownTokenType.BackTick:
                     if (textContent !== "") {
                         contents.push(new Text(textContent))
                         textContent = "";
                     }
-                    let starText = this.#emphasis()
-                    for (let i = 0; i < starText.length; i++) {
-                        contents.push(starText[i]);
+                    const runs = token.type() === MarkdownTokenType.Star
+                        ? this.#emphasis()
+                        : this.#inlineCode();
+                    for (let i = 0; i < runs.length; i++) {
+                        contents.push(runs[i]);
                     }
                     break;
             }

@@ -11,7 +11,7 @@ import { TextWidget, TextWidgetConfig } from "./text";
 
 export type WidgetBuilder = (node: FlowNode, confg?: any) => Widget;
 
-class WidgetFactory {
+export class WidgetFactory {
 
     #registeredWidgets: Map<string, WidgetBuilder>
 

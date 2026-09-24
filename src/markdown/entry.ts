@@ -7,6 +7,13 @@ export interface MarkdownEntry {
     render(ctx: CanvasRenderingContext2D, position: Vector2, scale: number, maxWidth: number): number
 }
 
+function onFontsLoaded(callback: () => void): void {
+    if (typeof document === "undefined" || document.fonts === undefined) {
+        return;
+    }
+    document.fonts.addEventListener("loadingdone", () => callback());
+}
+
 export class CodeBlockEntry {
 
     #text: Text
@@ -17,6 +24,10 @@ export class CodeBlockEntry {
 
     #calculatedForWidth: number;
 
+    text(): Text {
+        return this.#text;
+    }
+
     constructor(text: Text) {
         this.#text = text;
         this.#calculatedForWidth = -1
@@ -24,7 +35,7 @@ export class CodeBlockEntry {
         this.#calculatedEntries = new List<Text>();
         this.#calculatedPositions = new List<Vector2>();
 
-        document.fonts.addEventListener("loadingdone", (event) => {
+        onFontsLoaded(() => {
             this.#calculatedForWidth = -1
         });
     }
@@ -113,6 +124,10 @@ export class UnorderedListMarkdownEntry {
         this.#entries = entries;
     }
 
+    entries(): ReadonlyArray<BasicMarkdownEntry> {
+        return this.#entries;
+    }
+
     render(ctx: CanvasRenderingContext2D, position: Vector2, scale: number, maxWidth: number): number {
         let offset = 0;
         let shift = 20;
@@ -152,6 +167,10 @@ export class BasicMarkdownEntry {
 
     #calculatedForWidth: number;
 
+    lines(): ReadonlyArray<Text> {
+        return this.#entries;
+    }
+
     constructor(lines: Array<Text>, underline: boolean, background: boolean) {
         this.#entries = lines;
         this.#underline = underline;
@@ -161,7 +180,7 @@ export class BasicMarkdownEntry {
         this.#calculatedEntries = new List<Text>();
         this.#calculatedPositions = new List<Vector2>();
 
-        document.fonts.addEventListener("loadingdone", (event) => {
+        onFontsLoaded(() => {
             this.#calculatedForWidth = -1
         });
     }

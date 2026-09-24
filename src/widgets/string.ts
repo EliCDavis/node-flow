@@ -3,7 +3,7 @@ import { TextBoxStyle, TextBoxStyleConfig, TextBoxStyleWithFallback } from "../s
 import { Box, InBox } from "../types/box";
 import { CopyVector2, Vector2 } from "../types/vector2";
 import { fitString } from "../utils/string";
-import { height, width } from "./widget";
+import { height, startingWidgetValue, width } from "./widget";
 import { FlowNode } from '../node';
 import { SetStringPopup } from "../popups/string";
 
@@ -60,8 +60,8 @@ export class StringWidget {
             text: { color: Theme.Widget.FontColor },
         }));
 
-        this.Set(config?.value === undefined ? "" : config?.value);
         this.#callback = config?.callback;
+        this.Set(startingWidgetValue(node, this.#nodeProperty, config?.value, ""));
         if (this.#nodeProperty !== undefined) {
             this.#node.addPropertyChangeListener(this.#nodeProperty, (oldVal, newVal) => {
                 this.Set(newVal);

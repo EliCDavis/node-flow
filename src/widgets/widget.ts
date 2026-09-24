@@ -10,3 +10,25 @@ export interface Widget {
     ClickStart(): void
     ClickEnd(): void
 }
+
+interface PropertyReader {
+    getProperty(name: string): any;
+}
+
+export function startingWidgetValue<T>(
+    node: PropertyReader,
+    property: string | undefined,
+    configured: T | undefined,
+    fallback: T,
+): T {
+    if (configured !== undefined) {
+        return configured;
+    }
+    if (property !== undefined && property !== null) {
+        const existing = node.getProperty(property);
+        if (existing !== undefined && existing !== null) {
+            return existing as T;
+        }
+    }
+    return fallback;
+}

@@ -15,7 +15,9 @@
   "scripts": {
     "build": "ts-node ./esbuild.ts",
     "watch": "npm run build -- --watch",
-    "package": "tsup"
+    "package": "tsup",
+    "test": "mocha",
+    "typecheck": "tsc --noEmit"
   },
   "homepage": "https://github.com/EliCDavis/node-flow",
   "repository": {

@@ -31,11 +31,50 @@ export interface PortConfig {
     type?: string;
     description?: string;
     array?: boolean;
+
+    /**
+     * Lets this port connect to a port of any type, instead of only to one
+     * declaring the same `type` string. For a port whose type is decided by
+     * whatever gets wired into it, where `type` is a placeholder shown to
+     * the user rather than a promise about the values passing through.
+     */
+    anyType?: boolean;
+
+    /**
+     * Every type this port takes, when it takes more than one. For a port
+     * that works on a single value or an array of them, where `type` is
+     * only the one it happens to be showing.
+     *
+     * An empty or absent list means the port takes exactly its `type`,
+     * unless `anyType` says otherwise.
+     */
+    acceptedTypes?: Array<string>;
+
     emptyStyle?: PortStyle;
     filledStyle?: PortStyle;
     onConnectionAdded?: ConnectionChangeCallback;
     onConnectionRemoved?: ConnectionChangeCallback;
 };
+
+/**
+ * Whether two ports may be connected, going by their types alone. Each port
+ * offers the set of types it takes - one entry for an ordinary port, several
+ * for a port that takes more than one, and none at all for a port that takes
+ * anything. They connect when those sets overlap.
+ */
+export function portsCompatible(a: Port | undefined | null, b: Port | undefined | null): boolean {
+    if (!a || !b) {
+        return false;
+    }
+
+    const left = a.acceptedTypes();
+    const right = b.acceptedTypes();
+    if (left.length === 0 || right.length === 0) {
+        return true;
+    }
+
+    return left.some((type) => right.includes(type));
+}
 
 // Calculate a color hash for an arbirary type
 function fallbackColor(type: string, s: number): string {
@@ -69,6 +108,18 @@ export class Port {
 
     #dataType: string;
 
+    #anyType: boolean;
+
+    #acceptedTypes: Array<string>;
+
+    #description: string;
+
+    #array: boolean;
+
+    #configuredEmptyFill: string | undefined;
+
+    #configuredFilledFill: string | undefined;
+
     #dataTypePopupElement: RenderElementBase;
 
     #onConnectionAdded: Array<ConnectionChangeCallback>;
@@ -81,17 +132,23 @@ export class Port {
         this.#portType = portType;
         this.#displayName = config?.name === undefined ? "Port" : config?.name;
         this.#dataType = config?.type === undefined ? "" : config?.type;
+        this.#anyType = config?.anyType === true;
+        this.#acceptedTypes = config?.acceptedTypes === undefined ? [] : config.acceptedTypes;
+        this.#description = config?.description === undefined ? "" : config.description;
+        this.#array = config?.array === true;
+        this.#configuredEmptyFill = config?.emptyStyle?.fillColor;
+        this.#configuredFilledFill = config?.filledStyle?.fillColor;
 
         this.#emptyStyle = {
             borderColor: config?.emptyStyle?.borderColor === undefined ? "#1c1c1c" : config.emptyStyle?.borderColor,
-            fillColor: config?.emptyStyle?.fillColor === undefined ? fallbackColor(this.#dataType, 0.3) : config.emptyStyle?.fillColor,
+            fillColor: this.#configuredEmptyFill === undefined ? fallbackColor(this.#dataType, 0.3) : this.#configuredEmptyFill,
             borderSize: config?.emptyStyle?.borderSize === undefined ? 1 : config.emptyStyle?.borderSize,
             size: config?.emptyStyle?.size === undefined ? 4 : config.emptyStyle?.size
         }
 
         this.#filledStyle = {
             borderColor: config?.filledStyle?.borderColor === undefined ? "#1c1c1c" : config.filledStyle?.borderColor,
-            fillColor: config?.filledStyle?.fillColor === undefined ? fallbackColor(this.#dataType, 1) : config.filledStyle?.fillColor,
+            fillColor: this.#configuredFilledFill === undefined ? fallbackColor(this.#dataType, 1) : this.#configuredFilledFill,
             borderSize: config?.filledStyle?.borderSize === undefined ? 1 : config.filledStyle?.borderSize,
             size: config?.filledStyle?.size === undefined ? 5 : config.filledStyle?.size
         }
@@ -106,9 +163,20 @@ export class Port {
             this.#onConnectionRemoved.push(config?.onConnectionRemoved);
         }
 
+        this.#dataTypePopupElement = this.#buildTooltip();
+    }
+
+    #buildTooltip(): RenderElementBase {
         const containerElements = new Array<RenderElementBase>();
+
         let dataTypeDisplay = this.#dataType;
-        if (config?.array === true) {
+        if (this.#acceptedTypes.length > 1) {
+            dataTypeDisplay = this.#acceptedTypes.join(" or ");
+        }
+        if (dataTypeDisplay === "" && this.#anyType) {
+            dataTypeDisplay = "any";
+        }
+        if (this.#array) {
             dataTypeDisplay = "Array<" + dataTypeDisplay + ">"
         }
         containerElements.push(new TextElement(
@@ -120,10 +188,9 @@ export class Port {
             }
         ));
 
-        const description = config?.description;
-        if (description && description !== "") {
+        if (this.#description !== "") {
             containerElements.push(new TextElement(
-                new Text(description, { color: "white", style: FontStyle.Italic }),
+                new Text(this.#description, { color: "white", style: FontStyle.Italic }),
                 {
                     Align: TextAlign.Center,
                     Padding: { Top: 16 },
@@ -133,7 +200,7 @@ export class Port {
             ));
         }
 
-        this.#dataTypePopupElement = new ContainerRenderElement(
+        return new ContainerRenderElement(
             containerElements,
             {
                 BackgroundColor: "rgba(0, 0, 0, 0.85)",
@@ -143,6 +210,41 @@ export class Port {
                 Padding: 13,
             }
         );
+    }
+
+    #refreshDataType(): void {
+        if (this.#configuredEmptyFill === undefined) {
+            this.#emptyStyle.fillColor = fallbackColor(this.#dataType, 0.3);
+        }
+        if (this.#configuredFilledFill === undefined) {
+            this.#filledStyle.fillColor = fallbackColor(this.#dataType, 1);
+        }
+        this.#dataTypePopupElement = this.#buildTooltip();
+    }
+
+    setDataType(type: string): void {
+        if (this.#dataType === type) {
+            return;
+        }
+        this.#dataType = type;
+        this.#refreshDataType();
+    }
+
+    setAnyType(anyType: boolean): void {
+        if (this.#anyType === anyType) {
+            return;
+        }
+        this.#anyType = anyType;
+        this.#refreshDataType();
+    }
+
+    /**
+     * Scope accepted types to singular type
+     */
+    settleOn(type: string): void {
+        this.#acceptedTypes = [type];
+        this.setDataType(type);
+        this.#refreshDataType();
     }
 
     addConnection(connection: Connection): void {
@@ -193,6 +295,27 @@ export class Port {
 
     getDataType(): string {
         return this.#dataType;
+    }
+
+    acceptsAnyType(): boolean {
+        return this.#anyType;
+    }
+
+    /**
+     * Every type this port takes. Empty means it takes anything.
+     */
+    acceptedTypes(): Array<string> {
+        if (this.#anyType) {
+            return [];
+        }
+        if (this.#acceptedTypes.length > 0) {
+            return this.#acceptedTypes;
+        }
+        return [this.#dataType];
+    }
+
+    setAcceptedTypes(types: Array<string>): void {
+        this.#acceptedTypes = types;
     }
 
     getPortType(): PortType {

@@ -1,7 +1,8 @@
+import { requestRender } from "../render_scheduler";
 import { Theme } from "../theme";
 import { List } from "../types/list";
 import { Text } from "../types/text";
-import { CopyVector2, Vector2, Zero } from "../types/vector2";
+import { Vector2, Zero } from "../types/vector2";
 
 export interface MarkdownEntry {
     render(ctx: CanvasRenderingContext2D, position: Vector2, scale: number, maxWidth: number): number
@@ -11,7 +12,10 @@ function onFontsLoaded(callback: () => void): void {
     if (typeof document === "undefined" || document.fonts === undefined) {
         return;
     }
-    document.fonts.addEventListener("loadingdone", () => callback());
+    document.fonts.addEventListener("loadingdone", () => {
+        callback();
+        requestRender();
+    });
 }
 
 export class CodeBlockEntry {

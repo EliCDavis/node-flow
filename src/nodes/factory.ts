@@ -1,5 +1,5 @@
 import { FlowNode } from "../node";
-import { Publisher, PublisherConfig } from "./publisher";
+import { NodeMenuFilter, Publisher, PublisherConfig } from "./publisher";
 import { ContextMenuConfig } from "../contextMenu";
 import { Vector2 } from "../types/vector2";
 import { nodeFlowGroup as nodeFlowContextMenuGroup, NodeSubsystem } from "./subsystem";
@@ -69,19 +69,23 @@ export class NodeFactory {
         return node;
     }
 
-    public newNodeSubmenus(graph: NodeSubsystem, position: Vector2): Array<ContextMenuConfig> {
+    public newNodeSubmenus(graph: NodeSubsystem, position: Vector2, filter?: NodeMenuFilter): Array<ContextMenuConfig> {
         const menus: Array<ContextMenuConfig> = [];
         for (let [_, publisher] of this.#registeredPublishers) {
-            menus.push(publisher.contextMenu(graph, position))
+            const built = publisher.contextMenu(graph, position, filter);
+            if (filter !== undefined && built.items?.length === 0 && built.subMenus?.length === 0) {
+                continue;
+            }
+            menus.push(built);
         }
         return menus;
     }
 
-    public openMenu(graph: NodeSubsystem, position: Vector2): ContextMenuConfig {
+    public openMenu(graph: NodeSubsystem, position: Vector2, filter?: NodeMenuFilter): ContextMenuConfig {
         return {
             name: "New Node",
             group: nodeFlowContextMenuGroup,
-            subMenus: this.newNodeSubmenus(graph, position),
+            subMenus: this.newNodeSubmenus(graph, position, filter),
         };
     }
 } 

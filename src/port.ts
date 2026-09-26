@@ -1,5 +1,6 @@
 import { Camera } from "./camera";
 import { Connection } from './connection';
+import { requestRender } from "./render_scheduler";
 import { RenderElementBase } from "./elements/base";
 import { ContainerRenderElement, AlignItems } from './elements/container';
 import { TextAlign, TextElement } from "./elements/text";
@@ -67,13 +68,24 @@ export function portsCompatible(a: Port | undefined | null, b: Port | undefined 
         return false;
     }
 
-    const left = a.acceptedTypes();
-    const right = b.acceptedTypes();
-    if (left.length === 0 || right.length === 0) {
+    return typeSetsCompatible(a.acceptedTypes(), b.acceptedTypes());
+}
+
+export function typeSetsCompatible(a: Array<string>, b: Array<string>): boolean {
+    if (a.length === 0 || b.length === 0) {
         return true;
     }
+    return a.some((type) => b.includes(type));
+}
 
-    return left.some((type) => right.includes(type));
+export function portConfigTypes(config: PortConfig): Array<string> {
+    if (config.anyType === true) {
+        return [];
+    }
+    if (config.acceptedTypes !== undefined && config.acceptedTypes.length > 0) {
+        return config.acceptedTypes;
+    }
+    return [config.type === undefined ? "" : config.type];
 }
 
 // Calculate a color hash for an arbirary type
@@ -220,6 +232,7 @@ export class Port {
             this.#filledStyle.fillColor = fallbackColor(this.#dataType, 1);
         }
         this.#dataTypePopupElement = this.#buildTooltip();
+        requestRender();
     }
 
     setDataType(type: string): void {

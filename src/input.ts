@@ -1,3 +1,4 @@
+import { requestRender } from "./render_scheduler";
 import { CopyVector2, Distance, SubVector2, Vector2, Zero } from "./types/vector2";
 
 const LONG_PRESS_MS = 500;
@@ -49,19 +50,25 @@ export class MouseObserver {
 
         ele.style.touchAction = "none";
 
-        ele.addEventListener("mousedown", this.#down.bind(this), false);
-        ele.addEventListener("touchstart", this.#touchStart.bind(this), { passive: false });
+        const redraws = <T extends Event>(handler: (event: T) => void) =>
+            (event: T): void => {
+                handler(event);
+                requestRender();
+            };
 
-        document.addEventListener("mouseup", this.#up.bind(this), false);
-        document.addEventListener("touchend", this.#touchEnd.bind(this), false);
-        document.addEventListener("touchcancel", this.#touchEnd.bind(this), false);
+        ele.addEventListener("mousedown", redraws(this.#down.bind(this)), false);
+        ele.addEventListener("touchstart", redraws(this.#touchStart.bind(this)), { passive: false });
 
-        ele.addEventListener("mousemove", this.#move.bind(this), false);
-        ele.addEventListener("touchmove", this.#touchMove.bind(this), { passive: false });
+        document.addEventListener("mouseup", redraws(this.#up.bind(this)), false);
+        document.addEventListener("touchend", redraws(this.#touchEnd.bind(this)), false);
+        document.addEventListener("touchcancel", redraws(this.#touchEnd.bind(this)), false);
 
-        ele.addEventListener("wheel", this.#wheel.bind(this), { passive: false });
+        ele.addEventListener("mousemove", redraws(this.#move.bind(this)), false);
+        ele.addEventListener("touchmove", redraws(this.#touchMove.bind(this)), { passive: false });
 
-        ele.addEventListener("drop", (ev) => {
+        ele.addEventListener("wheel", redraws(this.#wheel.bind(this)), { passive: false });
+
+        ele.addEventListener("drop", redraws((ev: DragEvent) => {
             ev.preventDefault();
             if (ev.dataTransfer?.items) {
                 [...ev.dataTransfer.items].forEach((item, i) => {
@@ -73,21 +80,21 @@ export class MouseObserver {
                     }
                 });
             }
-        });
+        }));
 
-        ele.addEventListener("dragover", (ev) => {
+        ele.addEventListener("dragover", redraws((ev: DragEvent) => {
             ev.preventDefault();
             this.#moveCallback(this.#mousePos(ev));
-        });
+        }));
 
-        ele.addEventListener("contextmenu", (evt) => {
+        ele.addEventListener("contextmenu", redraws((evt: MouseEvent) => {
             evt.preventDefault();
             // Touch uses long-press; ignore synthetic browser contextmenu after touch.
             if (Date.now() - this.#lastTouchAt < SUPPRESS_MOUSE_MS) {
                 return;
             }
             this.#contextMenu(this.#mousePos(evt));
-        }, false);
+        }), false);
     }
 
     #mousePos(event: MouseEvent | DragEvent | WheelEvent): Vector2 {
@@ -198,6 +205,7 @@ export class MouseObserver {
             this.#clicked = false;
             this.#clickStop();
             this.#contextMenu({ x, y });
+            requestRender();
         }, LONG_PRESS_MS);
 
         this.#clicked = true;

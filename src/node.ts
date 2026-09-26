@@ -1,4 +1,5 @@
 import { Port, PortConfig, PortType } from "./port";
+import { requestRender } from "./render_scheduler";
 import { FontWeight, TextStyle, TextStyleConfig, TextStyleFallback } from "./styles/text";
 import { Box, InBox } from "./types/box";
 import { CopyVector2, Distance, ScaleVector, Vector2, Zero } from "./types/vector2";
@@ -402,6 +403,7 @@ export class FlowNode {
             return;
         }
         this.#selected = true;
+        requestRender();
         for (let i = 0; i < this.#onSelect.length; i++) {
             this.#onSelect[i]();
         }
@@ -457,6 +459,7 @@ export class FlowNode {
         }
 
         this.#data[name] = value;
+        requestRender();
 
         for (let i = 0; i < this.#registeredAnyPropertyChangeCallbacks.length; i++) {
             this.#registeredAnyPropertyChangeCallbacks[i](name, oldValue, value);
@@ -735,6 +738,7 @@ export class FlowNode {
             return;
         }
         this.#selected = false;
+        requestRender();
         for (let i = 0; i < this.#onUnselect.length; i++) {
             this.#onUnselect[i]();
         }
@@ -772,6 +776,7 @@ export class FlowNode {
 
     public setPosition(position: Vector2): void {
         CopyVector2(this.#position, position);
+        requestRender();
     }
 
     public getPosition(): Vector2 {
@@ -854,11 +859,13 @@ export class FlowNode {
 
     addWidget(widget: Widget): void {
         this.#widgets.push(widget);
+        requestRender();
     }
 
     insertWidget(index: number, widget: Widget): void {
         const at = Math.max(0, Math.min(index, this.#widgets.length));
         this.#widgets.splice(at, 0, widget);
+        requestRender();
     }
 
     removeWidget(widget: Widget): void {
@@ -867,13 +874,16 @@ export class FlowNode {
             throw new Error("node does not contain widget");
         }
         this.#widgets.splice(index, 1);
+        requestRender();
     }
 
     removeWidgetAt(index: number): Widget | undefined {
         if (index < 0 || index >= this.#widgets.length) {
             return undefined;
         }
-        return this.#widgets.splice(index, 1)[0];
+        const removed = this.#widgets.splice(index, 1)[0];
+        requestRender();
+        return removed;
     }
 
     moveWidget(from: number, to: number): void {
@@ -885,10 +895,12 @@ export class FlowNode {
         }
         const [widget] = this.#widgets.splice(from, 1);
         this.#widgets.splice(to, 0, widget);
+        requestRender();
     }
 
     clearWidgets(): void {
         this.#widgets.length = 0;
+        requestRender();
     }
 
     getWidget(index: number): Widget {
@@ -978,6 +990,7 @@ export class FlowNode {
         }
 
         this.#title.set(cleaned);
+        requestRender();
 
         for (let i = 0; i < this.#titleChangeCallback.length; i++) {
             const callback = this.#titleChangeCallback[i];
@@ -1001,6 +1014,7 @@ export class FlowNode {
 
         const old = this.#infoText;
         this.#infoText = cleaned;
+        requestRender();
 
         for (let i = 0; i < this.#infoChangeCallback.length; i++) {
             const callback = this.#infoChangeCallback[i];
@@ -1053,7 +1067,15 @@ export class FlowNode {
         this.#messages = [];
     }
 
+    public hasBeenLaidOut(): boolean {
+        return this.#laidOut;
+    }
+
+    #laidOut: boolean = false;
+
     render(ctx: CanvasRenderingContext2D, camera: Camera, state: NodeState, mousePosition: Vector2 | undefined, postProcess: PassSubsystem): void {
+        this.#laidOut = true;
+
         VectorPool.run(() => {
             const tempMeasurement = VectorPool.get();
 
@@ -1255,6 +1277,63 @@ export class FlowNode {
                 const message = this.#messages[i];
                 messageStart.y += message.render(ctx, camera.zoom, messageStart, !(state === NodeState.Idle)) + (10 * camera.zoom);
             }
+
+            this.#rememberPortOffsets(nodeBounds, camera.zoom);
         })
+    }
+
+    #portOffsets: { input: Array<Box>, output: Array<Box> } = { input: [], output: [] };
+
+    #rememberPortOffsets(bounds: Box, zoom: number): void {
+        if (zoom <= 0) {
+            return;
+        }
+
+        const record = (positions: List<Box>, into: Array<Box>) => {
+            into.length = 0;
+            for (let i = 0; i < positions.Count(); i++) {
+                const box = positions.At(i);
+                into.push({
+                    Position: {
+                        x: (box.Position.x - bounds.Position.x) / zoom,
+                        y: (box.Position.y - bounds.Position.y) / zoom,
+                    },
+                    Size: {
+                        x: box.Size.x / zoom,
+                        y: box.Size.y / zoom,
+                    },
+                });
+            }
+        };
+
+        record(this.#inputPortPositions, this.#portOffsets.input);
+        record(this.#outputPortPositions, this.#portOffsets.output);
+    }
+
+    public layoutPortsWithoutDrawing(bounds: Box, zoom: number): boolean {
+        if (this.#portOffsets.input.length === 0 && this.#portOffsets.output.length === 0) {
+            return false;
+        }
+
+        const project = (offsets: Array<Box>, into: List<Box>) => {
+            into.Clear();
+            for (let i = 0; i < offsets.length; i++) {
+                const offset = offsets[i];
+                into.Push({
+                    Position: {
+                        x: bounds.Position.x + (offset.Position.x * zoom),
+                        y: bounds.Position.y + (offset.Position.y * zoom),
+                    },
+                    Size: {
+                        x: offset.Size.x * zoom,
+                        y: offset.Size.y * zoom,
+                    },
+                });
+            }
+        };
+
+        project(this.#portOffsets.input, this.#inputPortPositions);
+        project(this.#portOffsets.output, this.#outputPortPositions);
+        return true;
     }
 }

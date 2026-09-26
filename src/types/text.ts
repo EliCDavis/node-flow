@@ -1,3 +1,4 @@
+import { requestRender } from "../render_scheduler";
 import { FontWeight, TextStyle, TextStyleConfig } from "../styles/text";
 import { splitString, splitStringIntoLines } from "../utils/string";
 import { CopyVector2, ScaleVector, Vector2, Zero } from "./vector2";
@@ -36,6 +37,7 @@ export class Text {
             if (!document.fonts.check(`16px "${this.#style.getFont()}"`)) {
                 document.fonts.addEventListener("loadingdone", () => {
                     this.#measured = false;
+                    requestRender();
                 });
             }
         }

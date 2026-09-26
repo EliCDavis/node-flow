@@ -7,6 +7,7 @@ import { Organize } from "../organize";
 import { PassSubsystem } from "../pass/subsystem";
 import { TimeExecution } from "../performance";
 import { Port, PortType, portsCompatible } from "../port";
+import { requestRender } from "../render_scheduler";
 import { BoxStyle } from "../styles/box";
 import { CursorStyle } from "../styles/cursor";
 import { Theme } from "../theme";
@@ -22,6 +23,33 @@ export type NodeAddedCallback = (node: FlowNode) => void;
 export type NodeRemovedCallback = (node: FlowNode) => void;
 
 export const nodeFlowGroup = "node-flow-graph-node-menu";
+
+/**
+ * A connection between two nodes of a copied set, by their position in that
+ * set rather than by node, so it can be rebuilt against the copies.
+ */
+export interface InternalConnection {
+    fromNode: number;
+    fromPort: number;
+    toNode: number;
+    toPort: number;
+}
+
+/**
+ * A connection that was dragged out and dropped on empty canvas. Describes
+ * what a node would have to offer to finish it, and joins the two up once
+ * one has been made.
+ */
+export interface DanglingConnection {
+    /** The side the new node has to offer. */
+    needs: PortType;
+
+    /** The types that side has to accept. Empty takes anything. */
+    types: Array<string>;
+
+    /** Wires the new node to the port the drag started from. */
+    connectTo: (node: FlowNode) => void;
+}
 
 export interface ConnectionRendererConfiguration {
     size?: number;
@@ -216,6 +244,10 @@ export class NodeSubsystem {
                 this.#boxSelect = true;
             }
 
+            if (!hoveringSomething && !ctrlKey) {
+                this.unselectAllNodes();
+            }
+
             return hoveringSomething || ctrlKey;
         }
 
@@ -285,6 +317,119 @@ export class NodeSubsystem {
         }
     }
 
+    public connectionsWithin(nodes: Array<FlowNode>): Array<InternalConnection> {
+        const within: Array<InternalConnection> = [];
+
+        for (const connection of this.#connections) {
+            const outNode = connection.outNode();
+            const inNode = connection.inNode();
+            if (outNode === null || inNode === null) {
+                continue;
+            }
+
+            const from = nodes.indexOf(outNode);
+            const to = nodes.indexOf(inNode);
+            if (from === -1 || to === -1) {
+                continue;
+            }
+
+            const outPort = connection.outPort();
+            const inPort = connection.inPort();
+            if (outPort === null || inPort === null) {
+                continue;
+            }
+
+            within.push({
+                fromNode: from,
+                fromPort: this.#outputPortIndex(outNode, outPort),
+                toNode: to,
+                toPort: this.#inputPortIndex(inNode, inPort),
+            });
+        }
+
+        return within;
+    }
+
+    #onConnectionReleased: ((dangling: DanglingConnection) => void) | null = null;
+
+    public setConnectionReleasedHandler(handler: (dangling: DanglingConnection) => void): void {
+        this.#onConnectionReleased = handler;
+    }
+
+    #describeDanglingConnection(conn: Connection): DanglingConnection | null {
+        const outNode = conn.outNode();
+        const inNode = conn.inNode();
+
+        // Dragged from an output, so the new node supplies the input.
+        if (outNode !== null && inNode === null) {
+            const from = conn.outPort();
+            if (from === null) {
+                return null;
+            }
+            const fromIndex = this.#outputPortIndex(outNode, from);
+            return {
+                needs: PortType.Input,
+                types: from.acceptedTypes(),
+                connectTo: (node) => {
+                    const to = this.#firstCompatiblePort(node, PortType.Input, from);
+                    if (to !== -1 && fromIndex !== -1) {
+                        this.connectNodes(outNode, fromIndex, node, to);
+                    }
+                },
+            };
+        }
+
+        // Dragged from an input, so the new node supplies the output.
+        if (inNode !== null && outNode === null) {
+            const to = conn.inPort();
+            if (to === null) {
+                return null;
+            }
+            const toIndex = this.#inputPortIndex(inNode, to);
+            return {
+                needs: PortType.Output,
+                types: to.acceptedTypes(),
+                connectTo: (node) => {
+                    const from = this.#firstCompatiblePort(node, PortType.Output, to);
+                    if (from !== -1 && toIndex !== -1) {
+                        this.connectNodes(node, from, inNode, toIndex);
+                    }
+                },
+            };
+        }
+
+        return null;
+    }
+
+    #outputPortIndex(node: FlowNode, port: Port): number {
+        for (let i = 0; i < node.outputs(); i++) {
+            if (node.outputPort(i) === port) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    #inputPortIndex(node: FlowNode, port: Port): number {
+        for (let i = 0; i < node.inputs(); i++) {
+            if (node.inputPort(i) === port) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    #firstCompatiblePort(node: FlowNode, side: PortType, against: Port): number {
+        const count = side === PortType.Input ? node.inputs() : node.outputs();
+        for (let i = 0; i < count; i++) {
+            const port = side === PortType.Input ? node.inputPort(i) : node.outputPort(i);
+            if (portsCompatible(port, against)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     clickEnd(): void {
 
         for (let i = 0; i < this.#nodesGrabbed.Count(); i++) {
@@ -312,7 +457,11 @@ export class NodeSubsystem {
         }
 
         if (this.#portHovering === null) {
+            const dangling = this.#describeDanglingConnection(this.#connectionSelected);
             this.#clearCurrentlySelectedConnection();
+            if (dangling !== null) {
+                this.#onConnectionReleased?.(dangling);
+            }
             return;
         }
 
@@ -408,6 +557,7 @@ export class NodeSubsystem {
             this.#idleConnectionRenderer,
         );
         this.#connections.push(connection);
+        requestRender();
         return connection;
     }
 
@@ -478,6 +628,7 @@ export class NodeSubsystem {
 
     addNode(node: FlowNode): void {
         this.#nodes.push(node);
+        requestRender();
         for (let i = 0; i < this.#registeredNodeAddedCallbacks.length; i++) {
             const callback = this.#registeredNodeAddedCallbacks[i];
             if (!callback) {
@@ -531,6 +682,7 @@ export class NodeSubsystem {
         this.#removeNodeConnections(nodeIndex);
         const node = this.#nodes[nodeIndex];
         this.#nodes.splice(nodeIndex, 1);
+        requestRender();
         for (let i = 0; i < this.#nodeRemovedCallbacks.length; i++) {
             this.#nodeRemovedCallbacks[i](node);
         }
@@ -541,6 +693,7 @@ export class NodeSubsystem {
             this.#connections[index].clearPorts();
         }
         this.#connections.splice(index, 1);
+        requestRender();
     }
 
     #removeConnection(connection: Connection, clearPorts: boolean): void {
@@ -594,12 +747,21 @@ export class NodeSubsystem {
             ]
         }
 
-        if (this.#nodesSelected().length > 0) {
+        const selectedCount = this.#nodesSelected().length;
+        if (selectedCount > 0) {
             organizeNodesSubMenu.items?.push({
                 name: "Selected Nodes",
                 group: nodeFlowGroup,
                 callback: () => {
                     this.#organizeSelected(ctx)
+                }
+            })
+
+            config.items?.push({
+                name: selectedCount === 1 ? "Delete Selected Node" : `Delete ${selectedCount} Selected Nodes`,
+                group: nodeFlowGroup,
+                callback: () => {
+                    this.removeSelectedNodes();
                 }
             })
         }
@@ -684,6 +846,32 @@ export class NodeSubsystem {
         }
     }
 
+    /** Drops the selection entirely. */
+    public unselectAllNodes(): void {
+        let changed = false;
+        for (let i = 0; i < this.#nodes.length; i++) {
+            if (this.#nodes[i].selected()) {
+                this.#nodes[i].unselect();
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            requestRender();
+        }
+    }
+
+    /**
+     * Removes every selected node, and the connections that touched them.
+     */
+    public removeSelectedNodes(): Array<FlowNode> {
+        const removed = this.getSelectedNodes();
+        for (const node of removed) {
+            this.removeNode(node);
+        }
+        return removed;
+    }
+
     #selectNodeByIndex(nodeIndex: number, unselectOthers: boolean): void {
         this.#selectNode(this.#nodes[nodeIndex], unselectOthers);
     }
@@ -729,8 +917,21 @@ export class NodeSubsystem {
 
         const selectedBox_Screenspace = this.#boxSelectionScreenspaceBox(camera);
 
+        // Nodes outside the canvas are not drawn, but their ports are still
+        // placed, because wires to them stay on screen. 
+        const canvas: Box = {
+            Position: { x: 0, y: 0 },
+            Size: { x: ctx.canvas.width, y: ctx.canvas.height },
+        };
+
         for (let i = 0; i < this.#nodes.length; i++) {
             let state = NodeState.Idle;
+
+            const nodeBounds = this.#nodes[i].calculateBounds(ctx, camera);
+            if (!BoxIntersection(nodeBounds, canvas)
+                && this.#nodes[i].layoutPortsWithoutDrawing(nodeBounds, camera.zoom)) {
+                continue;
+            }
 
             if (mousePosition !== undefined && !this.#boxSelect) {
                 const intersection = this.#nodes[i].inBounds(ctx, camera, mousePosition);
@@ -791,12 +992,21 @@ export class NodeSubsystem {
     render(ctx: CanvasRenderingContext2D, camera: Camera, mousePosition: Vector2 | undefined): RenderResults | undefined {
         this.#lastCtx = ctx;
         this.#cursor = CursorStyle.Default;
+
+        // Connections draw first but need port positions, which only exist
+        // once a node has been drawn so a new node costs one extra frame.
+        const awaitingLayout = this.#nodes.some((node) => !node.hasBeenLaidOut());
+
         TimeExecution("Render_Connections", () => {
             this.#renderConnections(ctx, camera, mousePosition);
         })
         TimeExecution("Render_Nodes", () => {
             this.#renderNodes(ctx, camera, mousePosition);
         })
+
+        if (awaitingLayout) {
+            requestRender();
+        }
 
         if (this.#boxSelect) {
             const box = this.#boxSelectionScreenspaceBox(camera);

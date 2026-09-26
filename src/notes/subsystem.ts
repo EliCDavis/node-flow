@@ -1,5 +1,6 @@
 import { Camera } from "../camera";
 import { ContextMenuConfig } from "../contextMenu";
+import { requestRender } from "../render_scheduler";
 import { RenderResults } from "../graphSubsystem";
 import { InBox } from "../types/box";
 import { Vector2 } from "../types/vector2";
@@ -81,6 +82,7 @@ export class NoteSubsystem {
         }
 
         this.#notes.push(note);
+        requestRender();
         for (let i = 0; i < this.#onNoteAddedCallbacks.length; i++) {
             this.#onNoteAddedCallbacks[i](note);
         }
@@ -222,6 +224,7 @@ export class NoteSubsystem {
         if (index > -1) {
             const noteRemoved = this.#notes[index];
             this.#notes.splice(index, 1);
+            requestRender();
 
             for (let i = 0; i < this.#onNoteRemovedCallbacks.length; i++) {
                 this.#onNoteRemovedCallbacks[i](noteRemoved)

@@ -1,3 +1,4 @@
+import { requestRender } from "../render_scheduler";
 import { Box } from "../types/box";
 import { CopyVector2, Vector2 } from "../types/vector2";
 
@@ -101,6 +102,7 @@ export class ImageWidget {
         img.src = url;
         img.onload = () => {
             this.#image = img;
+            requestRender();
         };
         img.onerror = (event) => {
             console.log("error loading image:", url, event);

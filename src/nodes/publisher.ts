@@ -1,7 +1,33 @@
 import { ContextMenuConfig, ContextMenuItemConfig } from "../contextMenu";
 import { FlowNode, FlowNodeConfig } from '../node';
+import { PortConfig, PortType, portConfigTypes, typeSetsCompatible } from "../port";
 import { Vector2 } from "../types/vector2";
 import { NodeSubsystem } from "./subsystem";
+
+/**
+ * Narrows a "new node" menu to the nodes that could actually be wired to a
+ * particular port.
+ */
+export interface NodeMenuFilter {
+    /** Which side the new node has to offer. */
+    needs: PortType;
+
+    /** Types that side has to accept. An empty list takes anything. */
+    types: Array<string>;
+
+    onCreated?: (node: FlowNode) => void;
+}
+
+function offersMatchingPort(config: FlowNodeConfig, filter: NodeMenuFilter): boolean {
+    const ports: Array<PortConfig> | undefined =
+        filter.needs === PortType.Input ? config.inputs : config.outputs;
+
+    if (ports === undefined) {
+        return false;
+    }
+
+    return ports.some((port) => typeSetsCompatible(portConfigTypes(port), filter.types));
+}
 
 interface PublisherNodes {
     [name: string]: FlowNodeConfig
@@ -50,7 +76,7 @@ export class Publisher {
         return this.#registeredNodes.delete(nodeType);
     }
 
-    #recurseBuildMenu(graph: NodeSubsystem, name: string, subMenu: Map<string, FlowNodeConfig>, position: Vector2): ContextMenuConfig {
+    #recurseBuildMenu(graph: NodeSubsystem, name: string, subMenu: Map<string, FlowNodeConfig>, position: Vector2, filter?: NodeMenuFilter): ContextMenuConfig {
         const items: Array<ContextMenuItemConfig> = [];
         const subMenus = new Map<string, Map<string, FlowNodeConfig>>();
 
@@ -59,12 +85,17 @@ export class Publisher {
             const bracketIndex = key.indexOf("[")
 
             if (slashIndex === -1 || (bracketIndex !== -1 && bracketIndex < slashIndex)) {
+                if (filter !== undefined && !offersMatchingPort(nodeConfig, filter)) {
+                    continue;
+                }
+
                 items.push({
                     name: key,
                     callback: () => {
                         const node = new FlowNode(nodeConfig);
                         node.setPosition(position);
                         graph.addNode(node);
+                        filter?.onCreated?.(node);
                     },
                 });
             } else {
@@ -81,7 +112,11 @@ export class Publisher {
 
         const menus: Array<ContextMenuConfig> = [];
         for (let [key, nodes] of subMenus) {
-            menus.push(this.#recurseBuildMenu(graph, key, nodes, position))
+            const built = this.#recurseBuildMenu(graph, key, nodes, position, filter);
+            if (filter !== undefined && built.items?.length === 0 && built.subMenus?.length === 0) {
+                continue;
+            }
+            menus.push(built);
         }
 
         return {
@@ -91,8 +126,8 @@ export class Publisher {
         }
     }
 
-    contextMenu(graph: NodeSubsystem, position: Vector2): ContextMenuConfig {
-        return this.#recurseBuildMenu(graph, this.#name, this.#registeredNodes, position);
+    contextMenu(graph: NodeSubsystem, position: Vector2, filter?: NodeMenuFilter): ContextMenuConfig {
+        return this.#recurseBuildMenu(graph, this.#name, this.#registeredNodes, position, filter);
     }
 
     create(nodeType: string): FlowNode {

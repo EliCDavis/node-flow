@@ -4,10 +4,14 @@
         "sourceMap": true, // Generate source maps (optional)
         "strict": true, // Enable strict type checking (optional)
         "outDir": "./dist/js",
-        "target": "ES2015",
+        // The source already uses #private class fields, which are ES2022,
+        // and the bundlers emit esnext. ES2015 only made tsc downlevel
+        // those fields to WeakMaps in an output nothing ships.
+        "target": "ES2022",
     },
     "include": [
-        "src/**/*.ts"
+        "src/**/*.ts",
+        "test/**/*.ts"
     ],
     "exclude": [
         "node_modules"

@@ -26,6 +26,22 @@ export {
 import { Port, PortConfig, PortStyle, PortType, portsCompatible } from './port';
 export { Port, PortConfig, PortStyle, PortType, portsCompatible };
 
+// Rendering
+import { renderContinuously, requestRender } from './render_scheduler';
+export { renderContinuously, requestRender };
+
+import { Minimap, MinimapConfig } from './minimap';
+export { Minimap, MinimapConfig };
+
+import { DanglingConnection, InternalConnection } from './nodes/subsystem';
+export { DanglingConnection, InternalConnection };
+
+import { NodeMenuFilter } from './nodes/publisher';
+export { NodeMenuFilter };
+
+import { portConfigTypes, typeSetsCompatible } from './port';
+export { portConfigTypes, typeSetsCompatible };
+
 // Connections
 import {
     Connection, ConnectionRenderer, ConnectionRendererParams, DefaultConnectionRenderer

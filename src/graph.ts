@@ -10,7 +10,7 @@ import { Clamp01 } from "./utils/math";
 import { GraphSubsystem, RenderResults } from './graphSubsystem';
 import { FlowNote } from "./notes/note";
 import { NoteAddedCallback, NoteDragStartCallback, NoteDragStopCallback, NoteRemovedCallback, NoteSubsystem, NoteSubsystemConfig } from "./notes/subsystem";
-import { ConnectionRendererConfiguration, NodeAddedCallback, NodeRemovedCallback, NodeSubsystem } from "./nodes/subsystem";
+import { ConnectionRendererConfiguration, DanglingConnection, InternalConnection, NodeAddedCallback, NodeRemovedCallback, NodeSubsystem } from "./nodes/subsystem";
 import { Connection } from './connection';
 import { Publisher } from './nodes/publisher';
 import { VectorPool } from './types/pool';
@@ -18,6 +18,8 @@ import { Camera, CameraOrientation } from './camera';
 export { CameraOrientation };
 import { PassSubsystem } from './pass/subsystem';
 import { QuickMenu } from './quickMenu';
+import { onRenderRequested, renderContinuously, requestRender } from './render_scheduler';
+import { Minimap, MinimapConfig } from './minimap';
 
 export type GraphRenderer = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, position: Vector2, scale: number) => void;
 
@@ -49,6 +51,10 @@ function BuildBackgroundRenderer(backgroundColor: string): GraphRenderer {
 
 const contextMenuGroup = "graph-context-menu";
 
+export type CopyCallback = (nodes: Array<FlowNode>, connections: Array<InternalConnection>) => void;
+
+export type PasteCallback = (position: Vector2) => void;
+
 export interface FlowNodeGraphConfiguration {
     backgroundRenderer?: GraphRenderer;
     backgroundColor?: string;
@@ -56,6 +62,7 @@ export interface FlowNodeGraphConfiguration {
     contextMenu?: ContextMenuConfig
     nodes?: NodeFactoryConfig
     board?: NoteSubsystemConfig
+    minimap?: MinimapConfig
 }
 
 interface OpenContextMenu {
@@ -221,7 +228,15 @@ export class NodeFlowGraph {
             this.#backgroundRenderer = BuildBackgroundRenderer(backgroundColor);
         }
 
-        window.requestAnimationFrame(this.#render.bind(this));
+        this.#minimap = new Minimap(config?.minimap);
+
+        this.#mainNodeSubsystem.setConnectionReleasedHandler((dangling) => {
+            this.#openScopedMenu(dangling);
+        });
+
+        this.#watchCanvasSize();
+        this.#stopRendering = onRenderRequested(this.#render.bind(this));
+        requestRender();
 
         new MouseObserver(this.#canvas,
             this.#mouseDragEvent.bind(this),
@@ -240,45 +255,115 @@ export class NodeFlowGraph {
         document.addEventListener(
             "keydown",
             (e) => {
-                if (document.activeElement) {
-                    if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
-                }
-
-                if (this.#openQuickMenu) {
-                    if (e.code === "Escape") {
-                        this.#openQuickMenu = null;
-                        return;
-                    }
-
-                    if (e.code === "Enter") {
-                        this.#openQuickMenu.Menu.execute();
-                        this.#openQuickMenu = null;
-                        return;
-                    }
-
-                    this.#openQuickMenu.Menu.keyboardEvent(e);
-                    return
-                }
-
-                const spacePressed = e.key == " " || e.code == "Space";
-                if (!spacePressed) {
-                    return;
-                }
-
-                if (!this.#mousePosition) {
-                    return;
-                }
-                const contextMenuPosition = this.#sceenPositionToGraphPosition(this.#mousePosition);
-
-                let items = this.#mainNodeSubsystem.nodeFactory().newNodeSubmenus(this.#mainNodeSubsystem, contextMenuPosition);
-                this.#openQuickMenu = {
-                    Menu: new QuickMenu({
-                        subMenus: items,
-                    }),
-                    Position: contextMenuPosition
-                }
+                this.#keyDown(e);
+                requestRender();
             }
         );
+    }
+
+    #copyCallbacks: Array<CopyCallback> = [];
+
+    #pasteCallbacks: Array<PasteCallback> = [];
+
+    public addCopyListener(callback: CopyCallback): void {
+        this.#copyCallbacks.push(callback);
+    }
+
+    public addPasteListener(callback: PasteCallback): void {
+        this.#pasteCallbacks.push(callback);
+    }
+
+    #raiseCopy(): void {
+        const nodes = this.#mainNodeSubsystem.getSelectedNodes();
+        if (nodes.length === 0) {
+            return;
+        }
+
+        const connections = this.#mainNodeSubsystem.connectionsWithin(nodes);
+        this.#copyCallbacks.forEach((callback) => callback(nodes, connections));
+    }
+
+    #raisePaste(): void {
+        const position = this.#mousePosition === undefined
+            ? { x: 0, y: 0 }
+            : this.#sceenPositionToGraphPosition(this.#mousePosition);
+
+        this.#pasteCallbacks.forEach((callback) => callback(position));
+    }
+
+    #deleteKey(e: KeyboardEvent): boolean {
+        return e.code === "Delete" || e.code === "Backspace" || e.key === "Delete" || e.key === "Backspace";
+    }
+
+    #keyDown(e: KeyboardEvent): void {
+        if (document.activeElement) {
+            if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+        }
+
+        if (this.#deleteKey(e)) {
+            if (this.#mainNodeSubsystem.getSelectedNodes().length > 0) {
+                e.preventDefault();
+                this.#mainNodeSubsystem.removeSelectedNodes();
+                return;
+            }
+        }
+
+        if (e.ctrlKey || e.metaKey) {
+            const letter = e.code.startsWith("Key")
+                ? e.code.substring(3).toLowerCase()
+                : (e.key ?? "").toLowerCase();
+
+            switch (letter) {
+                case "c":
+                    this.#raiseCopy();
+                    return;
+
+                case "v":
+                    this.#raisePaste();
+                    return;
+
+                // duplicate
+                case "d":
+                    e.preventDefault();
+                    this.#raiseCopy();
+                    this.#raisePaste();
+                    return;
+            }
+        }
+
+        if (this.#openQuickMenu) {
+            if (e.code === "Escape") {
+                this.#openQuickMenu = null;
+                return;
+            }
+
+            if (e.code === "Enter") {
+                this.#openQuickMenu.Menu.execute();
+                this.#openQuickMenu = null;
+                return;
+            }
+
+            this.#openQuickMenu.Menu.keyboardEvent(e);
+            return
+        }
+
+        const spacePressed = e.key == " " || e.code == "Space";
+        if (!spacePressed) {
+            return;
+        }
+
+        if (!this.#mousePosition) {
+            return;
+        }
+        const contextMenuPosition = this.#sceenPositionToGraphPosition(this.#mousePosition);
+
+        let items = this.#mainNodeSubsystem.nodeFactory().newNodeSubmenus(this.#mainNodeSubsystem, contextMenuPosition);
+        this.#openQuickMenu = {
+            Menu: new QuickMenu({
+                subMenus: items,
+            }),
+            Position: contextMenuPosition
+        }
     }
 
     #fileDrop(file: File): void {
@@ -362,7 +447,31 @@ export class NodeFlowGraph {
         this.#contextMenuEntryHovering = null;
 
         this.#mousePosition = mousePosition;
+
+        if (this.#minimap.contains(mousePosition)) {
+            this.#lookAtFromMinimap(mousePosition);
+            this.#draggingMinimap = true;
+            return;
+        }
+
         this.currentView().clickStart(mousePosition, this.#camera, ctrlKey);
+    }
+
+    #draggingMinimap: boolean = false;
+
+    #lookAtFromMinimap(mousePosition: Vector2): void {
+        const target: Vector2 = { x: 0, y: 0 };
+        this.#minimap.graphPositionOf(mousePosition, target);
+
+        // Centre the viewport on it rather than putting it in the corner.
+        this.#camera.position.x = -(target.x * this.#camera.zoom) + (this.#canvas.width / 2);
+        this.#camera.position.y = -(target.y * this.#camera.zoom) + (this.#canvas.height / 2);
+        requestRender();
+    }
+
+    /** The minimap, so it can be turned on and sized by the host. */
+    public minimap(): Minimap {
+        return this.#minimap;
     }
 
     currentView(): GraphView {
@@ -387,6 +496,14 @@ export class NodeFlowGraph {
      */
     getSelectedNodes(): Array<FlowNode> {
         return this.#mainNodeSubsystem.getSelectedNodes();
+    }
+
+    public unselectAllNodes(): void {
+        this.#mainNodeSubsystem.unselectAllNodes();
+    }
+
+    public removeSelectedNodes(): Array<FlowNode> {
+        return this.#mainNodeSubsystem.removeSelectedNodes();
     }
 
     /**
@@ -533,11 +650,42 @@ export class NodeFlowGraph {
         };
     }
 
+    #openScopedMenu(dangling: DanglingConnection): void {
+        if (this.#mousePosition === undefined) {
+            return;
+        }
+
+        const position = this.#sceenPositionToGraphPosition(this.#mousePosition);
+        const menu = this.#mainNodeSubsystem.nodeFactory().openMenu(
+            this.#mainNodeSubsystem,
+            position,
+            {
+                needs: dangling.needs,
+                types: dangling.types,
+                onCreated: dangling.connectTo,
+            },
+        );
+
+        this.#openedContextMenu = {
+            Menu: new ContextMenu(menu),
+            Position: position,
+        };
+        requestRender();
+    }
+
     #clickEnd(): void {
+        this.#draggingMinimap = false;
         this.currentView().clickEnd();
     }
 
     #mouseDragEvent(delta: Vector2): void {
+        if (this.#draggingMinimap) {
+            if (this.#mousePosition !== undefined) {
+                this.#lookAtFromMinimap(this.#mousePosition);
+            }
+            return;
+        }
+
         let draggingSomething = this.currentView().mouseDragEvent(delta, this.#camera.zoom);
         if (!draggingSomething) {
             this.#camera.position.x += delta.x;
@@ -549,14 +697,57 @@ export class NodeFlowGraph {
 
     #cursor: CursorStyle;
 
-    #render(): void {
-        if (this.#canvas.parentNode !== null) {
-            // Stupid as any because typescript doesn't think it exists
-            var rect = (this.#canvas.parentNode as any).getBoundingClientRect();
-            this.#canvas.width = rect.width;
-            this.#canvas.height = rect.height;
+    #minimap: Minimap;
+
+    #stopRendering: () => void;
+
+    #sizeObserver: ResizeObserver | undefined;
+
+    #matchCanvasToParent(): void {
+        const parent = this.#canvas.parentNode as HTMLElement | null;
+        if (parent === null) {
+            return;
         }
 
+        const rect = parent.getBoundingClientRect();
+        if (this.#canvas.width === rect.width && this.#canvas.height === rect.height) {
+            return;
+        }
+
+        this.#canvas.width = rect.width;
+        this.#canvas.height = rect.height;
+    }
+
+    #watchCanvasSize(): void {
+        this.#matchCanvasToParent();
+
+        const parent = this.#canvas.parentNode as HTMLElement | null;
+        if (parent === null || typeof ResizeObserver === "undefined") {
+            return;
+        }
+
+        this.#sizeObserver = new ResizeObserver(() => {
+            this.#matchCanvasToParent();
+            requestRender();
+        });
+        this.#sizeObserver.observe(parent);
+    }
+
+    public requestRender(): void {
+        requestRender();
+    }
+
+    public renderContinuously(): () => void {
+        return renderContinuously();
+    }
+
+    public dispose(): void {
+        this.#stopRendering();
+        this.#sizeObserver?.disconnect();
+    }
+
+    #render(): void {
+        this.#matchCanvasToParent();
 
         this.#cursor = CursorStyle.Default;
 
@@ -569,6 +760,10 @@ export class NodeFlowGraph {
             }
         });
 
+        TimeExecution("Render_Minimap", () => {
+            this.#minimap.render(this.#ctx, this.#canvas, this.#camera, this.#mainNodeSubsystem.getNodes());
+        });
+
         TimeExecution("Render_Context", this.#renderContextMenu.bind(this));
 
         TimeExecution("Render_QuickMenu", this.#renderQuickMenu.bind(this))
@@ -579,8 +774,6 @@ export class NodeFlowGraph {
             this.#canvas.style.cursor = this.#cursor;
         }
         this.#lastFrameCursor = this.#cursor;
-
-        window.requestAnimationFrame(this.#render.bind(this));
     }
 
     #renderBackground(): void {

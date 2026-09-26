@@ -59,6 +59,14 @@ export const Theme = {
         FontColor: "#afb9bb",
         DisabledFontColor: "#4a585c",
     },
+    Minimap: {
+        BackgroundColor: "rgba(7, 33, 42, 0.85)",
+        BorderColor: "#1c1c1c",
+        BorderRadius: 4,
+        Padding: 6,
+        NodeColor: "#6b7f85",
+        ViewportColor: "rgba(175, 185, 187, 0.25)",
+    },
     Note: {
         FontColor: "#afb9bb",
         FontSize: 16,

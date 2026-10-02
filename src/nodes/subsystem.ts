@@ -448,7 +448,9 @@ export class NodeSubsystem {
         }
 
         if (this.#widgetCurrentlyClicking !== null) {
-            this.#widgetCurrentlyClicking.ClickEnd();
+            if (this.#widgetHovering === this.#widgetCurrentlyClicking) {
+                this.#widgetCurrentlyClicking.ClickEnd();
+            }
             this.#widgetCurrentlyClicking = null;
         }
 

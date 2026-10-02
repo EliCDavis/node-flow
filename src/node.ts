@@ -1334,6 +1334,9 @@ export class FlowNode {
 
         project(this.#portOffsets.input, this.#inputPortPositions);
         project(this.#portOffsets.output, this.#outputPortPositions);
+
+        this.#widgetPositions.Clear();
+
         return true;
     }
 }

@@ -60,7 +60,7 @@ export const Theme = {
         DisabledFontColor: "#4a585c",
     },
     Minimap: {
-        BackgroundColor: "rgba(7, 33, 42, 0.85)",
+        BackgroundColor: "rgba(10, 16, 18, 0.85)",
         BorderColor: "#1c1c1c",
         BorderRadius: 4,
         Padding: 6,

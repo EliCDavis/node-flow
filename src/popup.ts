@@ -25,6 +25,8 @@ export class Popup {
 
     #popup: HTMLDivElement | null;
 
+    #keyHandler: ((e: KeyboardEvent) => void) | null;
+
     constructor(config: PopupConfig) {
         this.#title = config.title;
         this.#options = config.options;
@@ -32,14 +34,26 @@ export class Popup {
         this.#onClose = config.onClose;
         this.#buttonCSS = config.buttonCSS === undefined ? "flex-grow: 1; margin-right: 8px;" : config.buttonCSS;
         this.#popup = null;
+        this.#keyHandler = null;
     }
 
     Hide(): void {
         if (this.#popup === null) {
             return;
         }
+        if (this.#keyHandler !== null) {
+            document.removeEventListener("keydown", this.#keyHandler, true);
+            this.#keyHandler = null;
+        }
         document.body.removeChild(this.#popup);
         this.#popup = null;
+    }
+
+    #close(option: string | null): void {
+        this.Hide();
+        if (this.#onClose !== undefined) {
+            this.#onClose(option);
+        }
     }
 
     Show(): void {
@@ -68,14 +82,21 @@ export class Popup {
             const button = document.createElement("button");
             button.style.cssText = this.#buttonCSS;
             button.textContent = this.#options[i];
-            button.onclick = () => {
-                this.Hide();
-                if (this.#onClose !== undefined) {
-                    this.#onClose(this.#options[i]);
-                }
-            };
+            button.onclick = () => this.#close(this.#options[i]);
             buttonContainer.appendChild(button);
         }
+
+        this.#keyHandler = (e: KeyboardEvent): void => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                this.#close(this.#options.length > 0 ? this.#options[0] : null);
+            } else if (e.key === "Escape") {
+                e.preventDefault();
+                this.#close(null);
+            }
+            e.stopPropagation();
+        };
+        document.addEventListener("keydown", this.#keyHandler, true);
     }
 
 } 

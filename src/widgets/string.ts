@@ -60,8 +60,10 @@ export class StringWidget {
             text: { color: Theme.Widget.FontColor },
         }));
 
-        this.#callback = config?.callback;
         this.Set(startingWidgetValue(node, this.#nodeProperty, config?.value, ""));
+
+        this.#callback = config?.callback;
+
         if (this.#nodeProperty !== undefined) {
             this.#node.addPropertyChangeListener(this.#nodeProperty, (oldVal, newVal) => {
                 this.Set(newVal);

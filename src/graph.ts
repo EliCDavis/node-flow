@@ -292,12 +292,29 @@ export class NodeFlowGraph {
     }
 
     #deleteKey(e: KeyboardEvent): boolean {
-        return e.code === "Delete" || e.code === "Backspace" || e.key === "Delete" || e.key === "Backspace";
+        return e.code === "Delete" || e.key === "Delete";
     }
 
     #keyDown(e: KeyboardEvent): void {
         if (document.activeElement) {
             if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+        }
+
+        // Open menus eat input  
+        if (this.#openQuickMenu) {
+            if (e.code === "Escape") {
+                this.#openQuickMenu = null;
+                return;
+            }
+
+            if (e.code === "Enter") {
+                this.#openQuickMenu.Menu.execute();
+                this.#openQuickMenu = null;
+                return;
+            }
+
+            this.#openQuickMenu.Menu.keyboardEvent(e);
+            return
         }
 
         if (this.#deleteKey(e)) {
@@ -329,22 +346,6 @@ export class NodeFlowGraph {
                     this.#raisePaste();
                     return;
             }
-        }
-
-        if (this.#openQuickMenu) {
-            if (e.code === "Escape") {
-                this.#openQuickMenu = null;
-                return;
-            }
-
-            if (e.code === "Enter") {
-                this.#openQuickMenu.Menu.execute();
-                this.#openQuickMenu = null;
-                return;
-            }
-
-            this.#openQuickMenu.Menu.keyboardEvent(e);
-            return
         }
 
         const spacePressed = e.key == " " || e.code == "Space";
@@ -593,6 +594,10 @@ export class NodeFlowGraph {
 
     connectNodes(nodeOut: FlowNode, outPort: number, nodeIn: FlowNode, inPort: number): Connection | undefined {
         return this.#mainNodeSubsystem.connectNodes(nodeOut, outPort, nodeIn, inPort);
+    }
+
+    clearNodeInputConnection(node: FlowNode, index: number): void {
+        this.#mainNodeSubsystem.clearNodeInputConnection(node, index);
     }
 
     addNode(node: FlowNode): void {

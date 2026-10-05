@@ -1,0 +1,329 @@
+<html>
+
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <title>Node Flow Demo</title>
+    <link rel="shortcut icon" href="#" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+
+    <script src="./dist/web/NodeFlow.js" type="module"></script>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+    <script type="module">
+        import { Theme, FlowNode, NodeFlowGraph, FlowNote } from "./dist/web/NodeFlow.js";
+
+        const canvas = document.getElementById("canvas");
+        Theme.FontFamily = "Source Code Pro";
+
+        const node3 = new FlowNode({
+            title: "Node 3",
+            position: { x: 850, y: 150 },
+            inputs: [
+                { name: "test input 1", type: "int" }
+            ],
+            outputs: [
+                { name: "float", type: "float32" }
+            ],
+            widgets: [
+                {
+                    type: "slider",
+                    config: {
+                        min: 0,
+                        max: 5,
+                        value: 2.5,
+                        snapIncrement: .25
+                    }
+                }
+            ]
+        });
+
+        const graph = new NodeFlowGraph(canvas, {
+            nodes: {
+                publishers: {
+                    "example": {
+                        name: "Example",
+                        description: "Bunch of example nodes",
+                        version: "v1.0.0",
+                        nodes: {
+                            "empty": {
+                                title: "Empty Node",
+                                canEditTitle: true,
+                                canEditPorts: true,
+                                canEditInfo: true
+                            },
+                            "widgets/slider": {
+                                title: "Slider Node",
+                                widgets: [
+                                    {
+                                        type: "slider",
+                                        config: {
+                                            value: 0.5,
+                                        }
+                                    }
+                                ],
+                                outputs: [
+                                    {
+                                        name: "out",
+                                        type: "float32"
+                                    }
+                                ]
+                            },
+                            "widgets/color": {
+                                title: "Color Node",
+                                widgets: [
+                                    {
+                                        type: "color",
+                                        config: {
+                                        }
+                                    }
+                                ],
+                                outputs: [
+                                    {
+                                        name: "out",
+                                        type: "color"
+                                    }
+                                ]
+                            },
+                            "widgets/text": {
+                                title: "Text Node",
+                                widgets: [
+                                    {
+                                        type: "text",
+                                        config: {
+                                            value: "Arbitrary Text"
+                                        }
+                                    }
+                                ],
+                                outputs: [
+                                    {
+                                        name: "out",
+                                        type: "color"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                },
+            },
+            board: {
+                notes: [
+                    {
+                        text: `
+# Notes
+
+This is an example of a *note* written in **markdown**.
+
+You can place notes around your graph to help explain your graph to other users.
+
+## Editting
+
+*Right-click* on this note and select "Edit Note" to put your text here!
+
+## Support
+
+This is a minimal implementation with graph-specific functionality. Currently implemented features are:
+
+* H1, H2, and H3
+* Bold and Italic
+* Unordered Lists
+* Code blocks
+`,
+                        position: {
+                            x: 2300,
+                            y: 20
+                        },
+                        locked: true,
+                    },
+                    {
+                        position: {
+                            x: 20,
+                            y: 20
+                        },
+                        locked: true,
+                        text: `
+# Node Flow
+
+Node Flow is a javascript library that enables developers to build node based tools similar to Unreal Blueprints or Blender Nodes. 
+
+## Example
+
+Scattered across this graph contains code snippets on how to accomplish different things within the library.
+
+\`\`\`
+// Create a canvas to render our graph to
+let canvas = document.createElement("canvas");
+
+// Create our Node Flow Graph
+let graph = new NodeFlowGraph(canvas)
+\`\`\`
+`
+                    },
+
+                ]
+            }
+        });
+
+        graph.addNote(new FlowNote({
+            position: { x: 800, y: 20 },
+            locked: true,
+            text: `
+## Inputs and Outputs
+
+Create a Add node that takes two numbers and outputs a single number
+
+\`\`\`
+let node = new FlowNode({ 
+    title: "Add",
+    info:  "I add two numbers",
+    inputs: [
+        { name: "a", type: "float32" },
+        { name: "b", type: "float32" }
+    ],
+     outputs: [
+        { 
+            name: "sum", 
+            type: "float32", 
+            description: "The sum of a and b"
+        }
+    ],
+});
+graph.addNode(node);
+\`\`\`
+
+You can also add additional inputs and outputs to the node after it's been created
+
+\`\`\`
+node.addInput({ name: "c", type: "float32" })
+node.addOutput({ name: "sum", type: "float32" })
+\`\`\`
+`        }));
+
+
+
+        var sumNode = new FlowNode({
+            position: {
+                x: 750,
+                y: 700
+            },
+            title: "Add",
+            info: "I add two numbers",
+            inputs: [
+                { name: "a", type: "float32" },
+                { name: "b", type: "float32" }
+            ],
+            outputs: [
+                { name: "sum", type: "float32", description: "The sum of a and b" }
+            ],
+        });
+
+
+        var aNode = new FlowNode({
+            position: {
+                x: 450,
+                y: 500
+            },
+            title: "Number",
+            info: "I'm a node with a number widget",
+            outputs: [
+                { name: "value", type: "float32" }
+            ],
+            widgets: [
+                {
+                    type: "number",
+                    config: { value: 1 }
+                }
+            ]
+        });
+
+        var bNode = new FlowNode({
+            position: {
+                x: 450,
+                y: 650
+            },
+            title: "Number",
+            info: "I'm a node with both a number and image widget on it",
+            outputs: [
+                { name: "value", type: "float32" }
+            ],
+            widgets: [
+                {
+                    type: "number",
+                    config: { value: 2 }
+                },
+                {
+                    type: "image",
+                    config: {
+                        image: "https://i.imgur.com/qRZgWC0.jpeg"
+                    }
+                }
+            ]
+        })
+
+        const arrNode = new FlowNode({
+            position: {
+                x: 950,
+                y: 700
+            },
+            title: "Add",
+            subTitle: "Array Inputs",
+            info: "This node contains a port that can take multiple input nodes at once, which can be useful for operations that can operate on [0,n] data sizes",
+            inputs: [
+                { name: "numbers", type: "float32", array: true, description: "All numbers to add together" },
+            ],
+            outputs: [
+                { name: "sum", type: "float32", description: "The sum of all connected nodes to our 'numbers' port" }
+            ],
+            messages: [
+                {
+                    message: "I am a message attatched to the node",
+                    alwaysShow: true,
+                },
+                  {
+                    message: "I am a message that only shows when you're hovering over the node!",
+                },
+                {
+                    message: "I am another message attatched to the node with type \"error\"",
+                    type: "error",
+                    alwaysShow: true,
+                }
+            ],
+        });
+
+        graph.addNode(sumNode)
+        graph.addNode(aNode)
+        graph.addNode(bNode)
+        graph.addNode(arrNode)
+
+        graph.connectNodes(aNode, 0, sumNode, 0)
+        graph.connectNodes(bNode, 0, sumNode, 1)
+
+        graph.connectNodes(aNode, 0, arrNode, 0)
+        graph.connectNodes(bNode, 0, arrNode, 0)
+
+    </script>
+</body>
+
+</html>

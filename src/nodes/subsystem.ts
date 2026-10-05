@@ -684,6 +684,16 @@ export class NodeSubsystem {
         this.#removeNodeConnections(nodeIndex);
         const node = this.#nodes[nodeIndex];
         this.#nodes.splice(nodeIndex, 1);
+
+        // Hover is only recomputed on render, which is lazy, so it must follow the splice.
+        if (this.#nodeHovering === nodeIndex) {
+            this.#nodeHovering = -1;
+        } else if (this.#nodeHovering > nodeIndex) {
+            this.#nodeHovering--;
+        }
+        if (this.#portHovering?.Node === node) {
+            this.#portHovering = null;
+        }
         requestRender();
         for (let i = 0; i < this.#nodeRemovedCallbacks.length; i++) {
             this.#nodeRemovedCallbacks[i](node);

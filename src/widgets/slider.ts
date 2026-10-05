@@ -112,7 +112,7 @@ export class SliderWidget {
 
     SetValue(newValue: number): void {
         const cleanedValue = Clamp(newValue, this.#min, this.#max);
-        if (this.#value === cleanedValue) {
+        if (Object.is(this.#value, cleanedValue)) {
             return;
         }
 

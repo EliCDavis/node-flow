@@ -454,7 +454,8 @@ export class FlowNode {
 
     public setProperty(name: string, value: any): void {
         const oldValue = this.#data[name];
-        if (oldValue === value) {
+        // Object.is, not ===: NaN never equals itsel.
+        if (Object.is(oldValue, value)) {
             return;
         }
 
@@ -974,11 +975,6 @@ export class FlowNode {
     }
 
     setTitle(newTitle: string): void {
-        if (!this.#canEditTitle) {
-            console.warn("setTitle instruction ignored, as node has been marked un-editable");
-            return;
-        }
-
         let cleaned = newTitle;
         if (cleaned === null || cleaned === undefined) {
             cleaned = "";
@@ -999,10 +995,6 @@ export class FlowNode {
     }
 
     setInfo(newInfo: string): void {
-        if (!this.#canEditInfo) {
-            console.warn("setInfo instruction ignored, as node has been marked un-editable");
-        }
-
         let cleaned = newInfo;
         if (cleaned === null || cleaned === undefined) {
             cleaned = "";

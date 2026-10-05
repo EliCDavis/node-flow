@@ -79,7 +79,7 @@ export class NumberWidget {
     }
 
     Set(newNumber: number): void {
-        if (this.#value === newNumber) {
+        if (Object.is(this.#value, newNumber)) {
             return;
         }
 

@@ -1,22 +1,10 @@
 import { HexToColor } from "../utils/color";
-import { TextStyleConfig } from "../styles/text";
 import { Box } from "../types/box";
-import { CopyVector2, Vector2 } from "../types/vector2";
-import { height, startingWidgetValue, width } from "./widget";
-import { Popup } from "../popup";
-import { TextBoxStyle } from '../styles/textBox';
-import { Theme } from "../theme";
+import { drawField } from "./field";
 import { FlowNode } from "../node";
+import { ValueWidget, ValueWidgetConfig } from "./value";
 
-export interface ColorWidgetConfig {
-    value?: string;
-
-    property?: string;
-
-    textStyle?: TextStyleConfig;
-
-    callback?: (newColor: string) => void;
-}
+export interface ColorWidgetConfig extends ValueWidgetConfig<string> { }
 
 function contrastColor(color: string): string {
     const c = HexToColor(color);
@@ -31,120 +19,73 @@ function contrastColor(color: string): string {
     return "white";
 }
 
-export class ColorWidget {
+let picker: HTMLInputElement | null = null;
 
-    #node: FlowNode;
+function sharedPicker(): HTMLInputElement {
+    if (picker === null || !picker.isConnected) {
+        picker = document.createElement("input");
+        picker.type = "color";
+        document.body.appendChild(picker);
+    }
+    return picker;
+}
 
-    #nodeProperty: string | undefined;
-
-    #value: string;
+export class ColorWidget extends ValueWidget<string> {
 
     #contrast: string;
 
-    #textBoxStyle: TextBoxStyle;
-
-    #callback?: (newColor: string) => void;
-
     constructor(node: FlowNode, config?: ColorWidgetConfig) {
-        this.#node = node;
-        this.#nodeProperty = config?.property;
-        this.#callback = config?.callback;
+        super(node, config, "#000000");
+        this.#contrast = contrastColor(this.value());
+    }
 
-        this.#value = startingWidgetValue(node, this.#nodeProperty, config?.value, "#000000");
-        this.#contrast = contrastColor(this.#value);
-        this.#textBoxStyle = new TextBoxStyle({
-            box: {
-                color: this.#value,
-                border: {
-                    color: this.#contrast,
-                    size: Theme.Widget.Border.Size
-                }
-            },
-            text: config?.textStyle
+    protected valueChanged(): void {
+        this.#contrast = contrastColor(this.value());
+    }
+
+    protected render(ctx: CanvasRenderingContext2D, box: Box, scale: number): void {
+        drawField(ctx, box, scale, {
+            input: true,
+            hovered: this.hovered(),
+            label: this.label(),
+            value: this.value(),
+            background: this.value(),
+            border: this.#contrast,
+            textColor: this.#contrast,
         });
-
-        if (this.#nodeProperty !== undefined) {
-            this.#node.addPropertyChangeListener(this.#nodeProperty, (oldVal, newVal) => {
-                this.Set(newVal);
-            });
-        }
     }
 
-    Size(): Vector2 {
-        return { "x": width, "y": height }
-    }
-
-    Set(value: string): void {
-        if (this.#value === value) {
+    protected onClick(): void {
+        const canvas = this.canvas();
+        if (canvas === null) {
             return;
         }
 
-        this.#value = value;
+        const before = this.value();
+        // The browser's picker has no alpha, so the old alpha is carried over.
+        const alpha = before.slice(7);
+        const box = this.box();
+        const rect = canvas.getBoundingClientRect();
+        const sx = canvas.width > 0 ? rect.width / canvas.width : 1;
+        const sy = canvas.height > 0 ? rect.height / canvas.height : 1;
 
-        if (this.#callback !== undefined) {
-            this.#callback(this.#value);
-        }
-
-        if (this.#nodeProperty !== undefined) {
-            this.#node.setProperty(this.#nodeProperty, this.#value);
-        }
-
-        // Update Styling
-        this.#contrast = contrastColor(this.#value);
-        this.#textBoxStyle.setBoxColor(this.#value);
-        this.#textBoxStyle.setBorderColor(this.#contrast);
-        this.#textBoxStyle.setTextColor(this.#contrast);
-    }
-
-    ClickStart(): void {
-    }
-
-    ClickEnd(): void {
-        let input: HTMLInputElement | null = null;
-
-        const popup = new Popup({
-            title: "Set Color",
-            options: ["Set", "Cancel"],
-            content: () => {
-                const container = document.createElement('div');
-
-                input = document.createElement('input')
-                input.type = "color";
-                input.value = this.#value;
-                input.name = "color"
-                container.append(input);
-
-                const label = document.createElement("label");
-                label.htmlFor = "color";
-                label.textContent = "Color";
-                container.append(label);
-
-                return container;
-            },
-            onClose: (button: string | null): void => {
-                if (button !== "Set" || input === null) {
-                    return;
-                }
-
-                this.Set(input.value);
-            },
-        });
-
-        popup.Show();
-    }
-
-    Draw(ctx: CanvasRenderingContext2D, position: Vector2, scale: number, mousePosition: Vector2 | undefined): Box {
-        const box = {
-            Position: { x: 0, y: 0 },
-            Size: {
-                x: width * scale,
-                y: height * scale
-            }
-        };
-        CopyVector2(box.Position, position);
-
-        this.#textBoxStyle.Draw(ctx, box, scale, this.#value)
-
-        return box;
+        const input = sharedPicker();
+        input.style.cssText = [
+            "position: fixed",
+            `left: ${rect.left + (box.Position.x * sx)}px`,
+            `top: ${rect.top + (box.Position.y * sy)}px`,
+            `width: ${box.Size.x * sx}px`,
+            `height: ${box.Size.y * sy}px`,
+            "opacity: 0",
+            "pointer-events: none",
+            "border: 0",
+            "padding: 0",
+        ].join(";");
+        input.value = before.slice(0, 7);
+        input.oninput = () => this.input(input.value + alpha);
+        input.onchange = () => this.commit(input.value + alpha, before);
+        // Reading the rect lays the input out first; the picker opens at its last laid-out spot.
+        input.getBoundingClientRect();
+        input.click();
     }
 }

@@ -1,130 +1,39 @@
-import { Theme } from "../theme";
-import { TextBoxStyle, TextBoxStyleConfig, TextBoxStyleWithFallback } from "../styles/textBox";
-import { Box, InBox } from "../types/box";
-import { CopyVector2, Vector2 } from "../types/vector2";
-import { fitString } from "../utils/string";
-import { height, startingWidgetValue, width } from "./widget";
-import { FlowNode } from '../node';
-import { SetStringPopup } from "../popups/string";
+import { FlowNode } from "../node";
+import { CursorStyle } from "../styles/cursor";
+import { Box } from "../types/box";
+import { drawField } from "./field";
+import { editInPlace } from "./inplace";
+import { ValueWidget, ValueWidgetConfig } from "./value";
 
-export interface StringWidgetConfig {
-    property?: string;
+export interface StringWidgetConfig extends ValueWidgetConfig<string> { }
 
-    value?: string;
-
-    textBoxStyle?: TextBoxStyleConfig;
-
-    callback?: (newString: string) => void;
-}
-
-export class StringWidget {
-
-    #value: string;
-
-    #idleStyle: TextBoxStyle;
-
-    #hoverStyle: TextBoxStyle;
-
-    #callback?: (newString: string) => void;
-
-    #node: FlowNode
-
-    #nodeProperty: string | undefined;
+export class StringWidget extends ValueWidget<string> {
 
     constructor(node: FlowNode, config?: StringWidgetConfig) {
-        this.#value = "";
-        
-        this.#node = node;
-        this.#nodeProperty = config?.property;
-        this.#idleStyle = new TextBoxStyle(TextBoxStyleWithFallback(config?.textBoxStyle, {
-            box: {
-                color: Theme.Widget.BackgroundColor,
-                border: {
-                    size: Theme.Widget.Border.Size,
-                    color: Theme.Widget.Border.Color,
-                },
-                radius: Theme.Widget.Border.Radius
-            },
-            text: { color: Theme.Widget.FontColor },
-        }));
-
-        this.#hoverStyle = new TextBoxStyle(TextBoxStyleWithFallback(config?.textBoxStyle, {
-            box: {
-                color: Theme.Widget.Hover.BackgroundColor,
-                border: {
-                    size: Theme.Widget.Border.Size,
-                    color: Theme.Widget.Border.Color,
-                },
-                radius: Theme.Widget.Border.Radius
-            },
-            text: { color: Theme.Widget.FontColor },
-        }));
-
-        this.Set(startingWidgetValue(node, this.#nodeProperty, config?.value, ""));
-
-        this.#callback = config?.callback;
-
-        if (this.#nodeProperty !== undefined) {
-            this.#node.addPropertyChangeListener(this.#nodeProperty, (oldVal, newVal) => {
-                this.Set(newVal);
-            });
-        }
+        super(node, config, "");
     }
 
-    Size(): Vector2 {
-        return { "x": width, "y": height }
+    Cursor(): CursorStyle {
+        return CursorStyle.Text;
     }
 
-    Set(value: string): void {
-        if (this.#value === value) {
-            return;
-        }
-        this.#value = value;
-
-        if (this.#nodeProperty !== undefined) {
-            this.#node.setProperty(this.#nodeProperty, this.#value)
-        }
-
-        if (this.#callback !== undefined) {
-            this.#callback(this.#value);
-        }
-    }
-
-    ClickStart(): void {
-    }
-
-    ClickEnd(): void {
-        const popup = SetStringPopup({
-            title: "Set String",
-            startingValue: this.#value,
-            onUpdate: (value: string): void => {
-                this.Set(value);
-            },
+    protected render(ctx: CanvasRenderingContext2D, box: Box, scale: number): void {
+        drawField(ctx, box, scale, {
+            input: true,
+            hovered: this.hovered(),
+            label: this.label(),
+            value: this.value(),
         });
-        popup.Show();
     }
 
-    Draw(ctx: CanvasRenderingContext2D, position: Vector2, scale: number, mousePosition: Vector2 | undefined): Box {
-        const box = {
-            Position: { x: 0, y: 0 },
-            Size: {
-                x: width * scale,
-                y: height * scale
-            }
-        };
-        CopyVector2(box.Position, position);
-
-
-        let style: TextBoxStyle = this.#idleStyle;
-
-        if (mousePosition !== undefined) {
-            if (InBox(box, mousePosition)) {
-                style = this.#hoverStyle;
-            }
-        }
-
-        style.DrawUnderline(ctx, box, scale, fitString(ctx, this.#value, box.Size.x - (20 * scale)))
-
-        return box;
+    protected onClick(): void {
+        const before = this.value();
+        editInPlace({
+            canvas: this.canvas(),
+            box: this.box(),
+            scale: this.scale(),
+            value: before,
+            onCommit: (text) => this.commit(text, before),
+        });
     }
 }

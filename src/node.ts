@@ -1,4 +1,4 @@
-import { Port, PortConfig, PortType } from "./port";
+import { ARRAY_SLOT_PITCH, Port, PortConfig, PortType } from "./port";
 import { requestRender } from "./render_scheduler";
 import { FontWeight, TextStyle, TextStyleConfig, TextStyleFallback } from "./styles/text";
 import { Box, InBox } from "./types/box";
@@ -7,8 +7,9 @@ import { Widget } from './widgets/widget';
 import { List } from './types/list';
 import { BoxStyle, BoxStyleConfig, BoxStyleWithFallback } from "./styles/box";
 import { Text } from "./types/text";
-import { GlobalWidgetFactory } from "./widgets/factory";
-import { Theme } from "./theme";
+import { GlobalWidgetFactory, WidgetConfig } from "./widgets/factory";
+import { Theme, themeVersion } from "./theme";
+import { drawBevel } from "./styles/bevel";
 import { TextAlign } from "./styles/canvasTextAlign";
 import { TextBaseline } from "./styles/canvasTextBaseline";
 import { CombineContextMenus, ContextMenuConfig, ContextMenuItemConfig } from "./contextMenu";
@@ -32,14 +33,10 @@ const MINIMUM_NODE_WIDTH = 150;
 
 type AnyPropertyChangeCallback = (propertyName: string, oldValue: any, newValue: any) => void
 type PropertyChangeCallback = (oldValue: any, newValue: any) => void
+type PropertyEditCallback = (newValue: any) => void
 type TitleChangeCallback = (node: FlowNode, oldTitle: string, newTitle: string) => void
 type InfoChangeCallback = (node: FlowNode, oldInfo: string, newInfo: string) => void
 
-
-export interface WidgetConfig {
-    type?: string,
-    config?: any
-}
 
 export interface FlowNodeTitleConfig {
     textStyle?: TextStyleConfig;
@@ -138,6 +135,7 @@ export interface NodeIntersection {
     // Widget
     Widget?: Widget
     WidgetIndex?: number
+    WidgetBox?: Box
 
 }
 
@@ -218,15 +216,19 @@ export class FlowNode {
 
     // Styling ================================================================
 
-    #titleColor: string;
+    #styleConfig: FlowNodeStyle | undefined;
 
-    #selectedStyle: BoxStyle;
+    #styledForTheme = -1;
 
-    #stateStyles: Map<NodeState, BoxStyle>;
+    #titleColor!: string;
+
+    #selectedStyle!: BoxStyle;
+
+    #stateStyles = new Map<NodeState, BoxStyle>();
 
     #padding: number;
 
-    #portTextStyle: TextStyle;
+    #portTextStyle!: TextStyle;
 
     #elementSpacing: number;
 
@@ -245,6 +247,8 @@ export class FlowNode {
     #registeredAnyPropertyChangeCallbacks: Array<AnyPropertyChangeCallback>;
 
     #registeredPropertyChangeCallbacks: Map<string, Array<PropertyChangeCallback>>;
+
+    #registeredPropertyEditCallbacks = new Map<string, Array<PropertyEditCallback>>();
 
     constructor(config?: FlowNodeConfig) {
         this.#input = new Array<Port>();
@@ -307,65 +311,21 @@ export class FlowNode {
         this.#position = config?.position === undefined ? { x: 0, y: 0 } : config.position;
         this.#title = new Text(
             config?.title === undefined ? "" : config.title,
-            TextStyleFallback(config?.style?.title?.textStyle, {
-                size: 16,
-                weight: FontWeight.Bold,
-                color: Theme.Node.FontColor
-            })
+            TextStyleFallback(config?.style?.title?.textStyle, { size: 16, weight: FontWeight.Bold })
         );
 
         this.#subTitle = new Text(
             config?.subTitle === undefined ? "" : config.subTitle,
-            TextStyleFallback(config?.style?.title?.textStyle, {
-                size: 10,
-                weight: FontWeight.Bold,
-                color: Theme.Node.FontColor
-            })
+            TextStyleFallback(config?.style?.title?.textStyle, { size: 10, weight: FontWeight.Bold })
         );
 
-        this.#infoSymbol = new Text(
-            "i",
-            {
-                size: 13,
-                weight: FontWeight.Bold,
-                color: Theme.Node.FontColor
-            }
-        );
+        this.#infoSymbol = new Text("i", { size: 13, weight: FontWeight.Bold });
         this.#infoText = config?.info ? config?.info : "";
-
-        this.#titleColor = config?.style?.title?.color === undefined ? "#154050" : config?.style?.title?.color;
 
         this.#padding = config?.style?.title?.padding === undefined ? 15 : config?.style?.title?.padding;
 
-        this.#stateStyles = new Map<NodeState, BoxStyle>();
-        this.#stateStyles.set(NodeState.Idle, new BoxStyle(BoxStyleWithFallback(config?.style?.idle, {
-            border: { color: Theme.Node.Border.Idle, size: 1 },
-            radius: Theme.Node.BorderRadius,
-            color: Theme.Node.BackgroundColor,
-        })));
-        this.#stateStyles.set(NodeState.MouseOver, new BoxStyle(BoxStyleWithFallback(config?.style?.mouseOver, {
-            border: { color: Theme.Node.Border.MouseOver, size: 1.1, },
-            radius: Theme.Node.BorderRadius,
-            color: Theme.Node.BackgroundColor,
-        })));
-        this.#stateStyles.set(NodeState.Grabbed, new BoxStyle(BoxStyleWithFallback(config?.style?.grabbed, {
-            border: { color: Theme.Node.Border.Grabbed, size: 2, },
-            radius: Theme.Node.BorderRadius,
-            color: Theme.Node.BackgroundColor,
-        })));
-
-        this.#selectedStyle = new BoxStyle(BoxStyleWithFallback(config?.style?.selected, {
-            border: { color: Theme.Node.Border.Selected, size: 1, },
-            radius: Theme.Node.BorderRadius,
-            color: Theme.Node.BackgroundColor,
-        }));
-
-        this.#portTextStyle = new TextStyle({
-            size: config?.style?.portText?.size === undefined ? 14 : config?.style?.portText?.size,
-            color: config?.style?.portText?.color === undefined ? Theme.Node.Port.FontColor : config?.style?.portText?.color,
-            font: config?.style?.portText?.font,
-            weight: config?.style?.portText?.weight,
-        });
+        this.#styleConfig = config?.style;
+        this.#applyStyle();
 
         if (config?.inputs !== undefined) {
             for (let i = 0; i < config.inputs.length; i++) {
@@ -380,12 +340,8 @@ export class FlowNode {
         }
 
         if (config?.widgets !== undefined) {
-            for (let i = 0; i < config.widgets.length; i++) {
-                const widget = config.widgets[i];
-                if (widget.type === undefined) {
-                    continue;
-                }
-                this.addWidget(GlobalWidgetFactory.create(this, widget.type, widget.config))
+            for (const widget of config.widgets) {
+                this.addWidget(GlobalWidgetFactory.createFromConfig(this, widget));
             }
         }
     }
@@ -473,6 +429,34 @@ export class FlowNode {
 
         for (let i = 0; i < callbacks.length; i++) {
             callbacks[i](oldValue, value);
+        }
+    }
+
+    /**
+     * Listens for a person changing the property through a widget, but not
+     * for the property being set from code.
+     */
+    public addPropertyEditListener(name: string, callback: PropertyEditCallback): void {
+        let callbacks = this.#registeredPropertyEditCallbacks.get(name);
+        if (callbacks === undefined) {
+            callbacks = [];
+            this.#registeredPropertyEditCallbacks.set(name, callbacks);
+        }
+        callbacks.push(callback);
+    }
+
+    /**
+     * Sets the property as a person's finished edit, so edit listeners hear
+     * it even when the value was already showing.
+     */
+    public editProperty(name: string, value: any): void {
+        this.setProperty(name, value);
+        const callbacks = this.#registeredPropertyEditCallbacks.get(name);
+        if (callbacks === undefined) {
+            return;
+        }
+        for (const callback of [...callbacks]) {
+            callback(value);
         }
     }
 
@@ -789,6 +773,7 @@ export class FlowNode {
     // }
 
     public calculateBounds(ctx: CanvasRenderingContext2D, camera: Camera): Box {
+        this.#followTheme();
         const tempMeasurement = Zero();
 
         const doublePadding = this.#padding * 2;
@@ -808,29 +793,23 @@ export class FlowNode {
         }
 
         size.x += doublePadding;
-        size.y += doublePadding + (this.#elementSpacing * this.#input.length);
+        size.y += doublePadding;
 
-        for (let i = 0; i < this.#input.length; i++) {
-            const port = this.#input[i];
+        for (const port of [...this.#input, ...this.#output]) {
+            if (port.hidden()) {
+                continue;
+            }
             this.#portTextStyle.measure(ctx, 1, port.getDisplayName(), tempMeasurement);
-            size.y += tempMeasurement.y;
+            size.y += this.#portRowHeight(port, tempMeasurement.y) + this.#elementSpacing;
             size.x = Math.max(size.x, tempMeasurement.x + doublePadding)
         }
 
-        size.y += (this.#elementSpacing * this.#output.length);
-
-        for (let i = 0; i < this.#output.length; i++) {
-            const port = this.#output[i];
-            this.#portTextStyle.measure(ctx, 1, port.getDisplayName(), tempMeasurement);
-            size.y += tempMeasurement.y;
-            size.x = Math.max(size.x, tempMeasurement.x + doublePadding)
-        }
-
-        size.y += (this.#elementSpacing * this.#widgets.length);
-        for (let i = 0; i < this.#widgets.length; i++) {
-            const element = this.#widgets[i];
-            const eleSize = element.Size();
-            size.y += eleSize.y
+        for (const widget of this.#widgets) {
+            if (widget.Hidden?.()) {
+                continue;
+            }
+            const eleSize = widget.Size();
+            size.y += eleSize.y + this.#elementSpacing;
             size.x = Math.max(size.x, (eleSize.x) + doublePadding)
         }
 
@@ -934,7 +913,7 @@ export class FlowNode {
         }
 
         for (let i = 0; i < this.#inputPortPositions.Count(); i++) {
-            if (InBox(this.#inputPortPositions.At(i), position)) {
+            if (!this.#input[i].hidden() && InBox(this.#inputPortPositions.At(i), position)) {
                 intersection.Node = this;
                 intersection.PortIndex = i;
                 intersection.PortIsInput = true;
@@ -943,7 +922,7 @@ export class FlowNode {
         }
 
         for (let i = 0; i < this.#outputPortPositions.Count(); i++) {
-            if (InBox(this.#outputPortPositions.At(i), position)) {
+            if (!this.#output[i].hidden() && InBox(this.#outputPortPositions.At(i), position)) {
                 intersection.Node = this;
                 intersection.PortIndex = i;
                 intersection.PortIsInput = false;
@@ -952,10 +931,12 @@ export class FlowNode {
         }
 
         for (let i = 0; i < this.#widgetPositions.Count(); i++) {
-            if (InBox(this.#widgetPositions.At(i), position)) {
+            const widget = this.#widgets[i];
+            if (widget !== undefined && !widget.Hidden?.() && InBox(this.#widgetPositions.At(i), position)) {
                 intersection.Node = this;
                 intersection.WidgetIndex = i;
-                intersection.Widget = this.#widgets[i];
+                intersection.Widget = widget;
+                intersection.WidgetBox = this.#widgetPositions.At(i);
             }
         }
 
@@ -1018,6 +999,13 @@ export class FlowNode {
         return this.#inputPortPositions.At(index);
     }
 
+    widgetPosition(index: number): Box | undefined {
+        if (index < 0 || index >= this.#widgetPositions.Count()) {
+            return undefined;
+        }
+        return this.#widgetPositions.At(index);
+    }
+
     inputPort(index: number): Port {
         return this.#input[index];
     }
@@ -1036,6 +1024,42 @@ export class FlowNode {
 
     outputs(): number {
         return this.#output.length;
+    }
+
+    #applyStyle(): void {
+        const style = this.#styleConfig;
+        const titleText = style?.title?.textStyle?.color ?? Theme.Node.Title.FontColor;
+        this.#title.style().setColor(titleText);
+        this.#subTitle.style().setColor(titleText);
+        this.#infoSymbol.style().setColor(titleText);
+
+        this.#titleColor = style?.title?.color ?? Theme.Node.Title.Color;
+
+        const box = (config: BoxStyleConfig | undefined, border: string, size: number) =>
+            new BoxStyle(BoxStyleWithFallback(config, {
+                border: { color: border, size },
+                radius: Theme.Node.BorderRadius,
+                color: Theme.Node.BackgroundColor,
+            }));
+        this.#stateStyles.set(NodeState.Idle, box(style?.idle, Theme.Node.Border.Idle, 1));
+        this.#stateStyles.set(NodeState.MouseOver, box(style?.mouseOver, Theme.Node.Border.MouseOver, 1.1));
+        this.#stateStyles.set(NodeState.Grabbed, box(style?.grabbed, Theme.Node.Border.Grabbed, 2));
+        this.#selectedStyle = box(style?.selected, Theme.Node.Border.Selected, 1);
+
+        this.#portTextStyle = new TextStyle({
+            size: style?.portText?.size ?? 14,
+            color: style?.portText?.color ?? Theme.Node.Port.FontColor,
+            font: style?.portText?.font,
+            weight: style?.portText?.weight,
+        });
+
+        this.#styledForTheme = themeVersion();
+    }
+
+    #followTheme(): void {
+        if (this.#styledForTheme !== themeVersion()) {
+            this.#applyStyle();
+        }
     }
 
     #calculateStyle(state: NodeState): BoxStyle {
@@ -1059,8 +1083,23 @@ export class FlowNode {
         this.#messages = [];
     }
 
+    #portRowHeight(port: Port, textHeight: number): number {
+        const slots = port.slots();
+        return slots > 1 ? Math.max(textHeight, slots * ARRAY_SLOT_PITCH) : textHeight;
+    }
+
     public hasBeenLaidOut(): boolean {
         return this.#laidOut;
+    }
+
+    /**
+     * Throws away where the ports were last placed, so wires wait for the
+     * next draw instead of pointing at the old spots.
+     */
+    public invalidateLayout(): void {
+        this.#laidOut = false;
+        this.#portOffsets = { input: [], output: [] };
+        requestRender();
     }
 
     #laidOut: boolean = false;
@@ -1109,7 +1148,10 @@ export class FlowNode {
                 [nodeStyle.radius() * camera.zoom, nodeStyle.radius() * camera.zoom, 0, 0]
             );
             ctx.fill();
-            // ctx.stroke();
+
+            if (Theme.Node.Bevel !== null) {
+                drawBevel(ctx, nodeBounds, camera.zoom, Theme.Node.Bevel, false);
+            }
 
             const titlePosition = VectorPool.get();
             titlePosition.x = nodeBounds.Position.x + (nodeBounds.Size.x / 2)
@@ -1209,8 +1251,12 @@ export class FlowNode {
             for (let i = 0; i < this.#input.length; i++) {
                 ctx.textAlign = TextAlign.Left;
                 const port = this.#input[i];
+                if (port.hidden()) {
+                    this.#inputPortPositions.Push({ Position: { x: nodeBounds.Position.x, y: startY }, Size: { x: 0, y: 0 } });
+                    continue;
+                }
                 this.#portTextStyle.measure(ctx, 1, port.getDisplayName(), tempMeasurement);
-                const portHeight = tempMeasurement.y * camera.zoom;
+                const portHeight = this.#portRowHeight(port, tempMeasurement.y) * camera.zoom;
                 const position = VectorPool.get();
 
                 position.x = nodeBounds.Position.x;
@@ -1231,6 +1277,10 @@ export class FlowNode {
             ctx.textAlign = TextAlign.Right;
             for (let i = 0; i < this.#output.length; i++) {
                 const port = this.#output[i];
+                if (port.hidden()) {
+                    this.#outputPortPositions.Push({ Position: { x: rightSide, y: startY }, Size: { x: 0, y: 0 } });
+                    continue;
+                }
                 this.#portTextStyle.measure(ctx, 1, port.getDisplayName(), tempMeasurement);
                 const portHeight = tempMeasurement.y * camera.zoom;
                 const position = VectorPool.get();
@@ -1250,15 +1300,18 @@ export class FlowNode {
             // Widgets
             for (let i = 0; i < this.#widgets.length; i++) {
                 const widget = this.#widgets[i];
+                if (widget.Hidden?.()) {
+                    this.#widgetPositions.Push({ Position: { x: nodeBounds.Position.x, y: startY }, Size: { x: 0, y: 0 } });
+                    continue;
+                }
                 const widgetSize = widget.Size();
-                const scaledWidgetWidth = widgetSize.x * camera.zoom;
-
-                const position = VectorPool.get();
-                position.x = nodeBounds.Position.x + ((nodeBounds.Size.x - scaledWidgetWidth) / 2);
-                position.y = startY;
-
-                this.#widgetPositions.Push(widget.Draw(ctx, position, camera.zoom, mousePosition));
-                startY += (widgetSize.y * camera.zoom) + scaledElementSpacing;
+                const box: Box = {
+                    Position: { x: nodeBounds.Position.x + scaledPadding, y: startY },
+                    Size: { x: nodeBounds.Size.x - (scaledPadding * 2), y: widgetSize.y * camera.zoom },
+                };
+                widget.Draw(ctx, box, camera.zoom, mousePosition);
+                this.#widgetPositions.Push(box);
+                startY += box.Size.y + scaledElementSpacing;
             }
 
             // Messages
@@ -1303,6 +1356,14 @@ export class FlowNode {
     }
 
     public layoutPortsWithoutDrawing(bounds: Box, zoom: number): boolean {
+        if (!this.placePorts(bounds, zoom)) {
+            return false;
+        }
+        this.#widgetPositions.Clear();
+        return true;
+    }
+
+    public placePorts(bounds: Box, zoom: number): boolean {
         if (this.#portOffsets.input.length === 0 && this.#portOffsets.output.length === 0) {
             return false;
         }
@@ -1326,8 +1387,6 @@ export class FlowNode {
 
         project(this.#portOffsets.input, this.#inputPortPositions);
         project(this.#portOffsets.output, this.#outputPortPositions);
-
-        this.#widgetPositions.Clear();
 
         return true;
     }

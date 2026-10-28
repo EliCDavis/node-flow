@@ -15,4 +15,5 @@ export enum CursorStyle {
     ZoomOut = 'zoom-out',
     None = 'none',
     ContextMenu = 'context-menu',
+    EWResize = 'ew-resize',
 }

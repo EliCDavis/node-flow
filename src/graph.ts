@@ -23,17 +23,19 @@ import { Minimap, MinimapConfig } from './minimap';
 
 export type GraphRenderer = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, position: Vector2, scale: number) => void;
 
-function BuildBackgroundRenderer(backgroundColor: string): GraphRenderer {
+function BuildBackgroundRenderer(backgroundColor: string | undefined): GraphRenderer {
     return (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, position: Vector2, scale: number): void => {
-        context.fillStyle = backgroundColor;
+        context.fillStyle = backgroundColor ?? Theme.Graph.BackgroundColor;
         context.fillRect(0, 0, canvas.width, canvas.height);
 
-        const alpha = Math.round(Clamp01(scale - 0.3) * 255)
+        const alpha = Clamp01(scale - 0.3);
         if (alpha <= 0) {
             return;
         }
 
-        context.fillStyle = `rgba(41, 54, 57, ${alpha})`;
+        context.save();
+        context.globalAlpha = alpha;
+        context.fillStyle = Theme.Graph.DotColor;
         const spacing = 100;
         const pi2 = 2 * Math.PI
         const dotScale = 2 * scale;
@@ -46,6 +48,7 @@ function BuildBackgroundRenderer(backgroundColor: string): GraphRenderer {
                 context.fill();
             }
         }
+        context.restore();
     }
 }
 
@@ -75,7 +78,7 @@ interface OpenQuickMenu {
     Position: Vector2
 }
 
-class GraphView {
+export class GraphView {
 
     #subsystems: Array<GraphSubsystem>;
 
@@ -138,9 +141,9 @@ class GraphView {
         const results: RenderResults = {};
         for (let i = 0; i < this.#subsystems.length; i++) {
             TimeExecution("Render_Subsystem_" + i, () => {
-                let results = this.#subsystems[i].render(ctx, camera, mousePosition);
-                if (results?.cursorStyle) {
-                    results.cursorStyle = results?.cursorStyle;
+                const layer = this.#subsystems[i].render(ctx, camera, mousePosition);
+                if (layer?.cursorStyle) {
+                    results.cursorStyle = layer.cursorStyle;
                 }
             })
         }
@@ -224,8 +227,7 @@ export class NodeFlowGraph {
         if (config?.backgroundRenderer !== undefined) {
             this.#backgroundRenderer = config?.backgroundRenderer
         } else {
-            const backgroundColor = config?.backgroundColor === undefined ? Theme.Graph.BackgroundColor : config.backgroundColor;
-            this.#backgroundRenderer = BuildBackgroundRenderer(backgroundColor);
+            this.#backgroundRenderer = BuildBackgroundRenderer(config?.backgroundColor);
         }
 
         this.#minimap = new Minimap(config?.minimap);

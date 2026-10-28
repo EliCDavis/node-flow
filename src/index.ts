@@ -4,8 +4,9 @@ export * from './node';
 import { ContextMenuConfig, ContextMenuItemConfig, ContextMenuItemState } from './contextMenu';
 export { ContextMenuConfig, ContextMenuItemConfig, ContextMenuItemState };
 
-import { Theme } from './theme';
-export { Theme };
+import { Theme, DefaultTheme, setTheme, themeVersion, onThemeChange, ThemeConfig, ThemeValues, BevelColors } from './theme';
+export { Theme, DefaultTheme, setTheme, themeVersion, onThemeChange };
+export type { ThemeConfig, ThemeValues, BevelColors };
 
 import { Publisher, PublisherConfig } from './nodes/publisher';
 export { Publisher, PublisherConfig };
@@ -53,30 +54,43 @@ import { NodeCreatedCallback, NodeFactory, NodeFactoryConfig } from './nodes/fac
 export { NodeCreatedCallback, NodeFactory, NodeFactoryConfig };
 
 // Widgets
-import { Widget } from './widgets/widget';
-import { NumberWidget, NumberWidgetConfig } from './widgets/number';
+import { Widget, WidgetBase, WidgetPointer } from './widgets/widget';
+import { ValueWidget, ValueWidgetConfig } from './widgets/value';
+import { NumberWidget, NumberWidgetConfig, formatNumber } from './widgets/number';
 import { ColorWidget, ColorWidgetConfig } from './widgets/color';
 import { StringWidget, StringWidgetConfig } from './widgets/string';
 import { TextWidget, TextWidgetConfig } from './widgets/text';
 import { ButtonWidget, ButtonWidgetConfig } from './widgets/button';
-import { ToggleWidget, ToggleWidgetConfig, ToggleStyleConfig } from './widgets/toggle';
+import { ToggleWidget, ToggleWidgetConfig } from './widgets/toggle';
 import { SliderWidget, SliderWidgetConfig } from './widgets/slider';
 import { ImageWidget, ImageWidgetConfig } from './widgets/image';
+import { RowWidget, RowWidgetConfig } from './widgets/row';
+import { drawField, drawFieldBox, drawFieldText, FieldLook, widgetFont } from './widgets/field';
+import { editInPlace, InPlaceEditConfig } from './widgets/inplace';
 export {
-    Widget,
+    WidgetBase, ValueWidget,
     NumberWidget, ColorWidget, StringWidget, TextWidget,
-    ButtonWidget, ToggleWidget, SliderWidget, ImageWidget
+    ButtonWidget, ToggleWidget, SliderWidget, ImageWidget, RowWidget,
+    drawField, drawFieldBox, drawFieldText, widgetFont, editInPlace, formatNumber,
 };
 export type {
+    Widget, WidgetPointer, ValueWidgetConfig, FieldLook, InPlaceEditConfig,
     NumberWidgetConfig, ColorWidgetConfig, StringWidgetConfig, TextWidgetConfig,
-    ButtonWidgetConfig, ToggleWidgetConfig, ToggleStyleConfig, SliderWidgetConfig,
-    ImageWidgetConfig
+    ButtonWidgetConfig, ToggleWidgetConfig, SliderWidgetConfig,
+    ImageWidgetConfig, RowWidgetConfig,
 };
 
-import { GlobalWidgetFactory, WidgetBuilder, WidgetFactory } from './widgets/factory';
+import {
+    GlobalWidgetFactory, WidgetBuilder, WidgetFactory,
+    WidgetConfig, WidgetConfigs, WidgetTypes, RowWidgetFactoryConfig,
+} from './widgets/factory';
 export { GlobalWidgetFactory, WidgetFactory };
-export type { WidgetBuilder };
+export type { WidgetBuilder, WidgetConfig, WidgetConfigs, WidgetTypes, RowWidgetFactoryConfig };
 
-import { Box } from './types/box';
+import { CursorStyle } from './styles/cursor';
+export { CursorStyle };
+
+import { Box, InBox } from './types/box';
 import { Vector2 } from './types/vector2';
+export { InBox };
 export type { Box, Vector2 };

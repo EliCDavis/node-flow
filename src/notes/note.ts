@@ -5,7 +5,7 @@ import { BoxStyle } from "../styles/box";
 import { TextAlign } from "../styles/canvasTextAlign";
 import { TextBaseline } from "../styles/canvasTextBaseline";
 import { TextStyleConfig } from "../styles/text";
-import { Theme } from "../theme";
+import { Theme, themeVersion } from "../theme";
 import { Box } from "../types/box";
 import { CopyVector2, Vector2, Zero } from "../types/vector2";
 import { Camera } from "../camera";
@@ -39,6 +39,8 @@ export class FlowNote {
     #originalText: string;
 
     #document: Array<MarkdownEntry>;
+
+    #parsedForTheme = -1;
 
     #width: number;
 
@@ -99,6 +101,7 @@ export class FlowNote {
     setText(text: string): void {
         this.#originalText = text;
         this.#document = BuildMarkdown(this.#originalText);
+        this.#parsedForTheme = themeVersion();
         for (let i = 0; i < this.#contentChangeCallbacks.length; i++) {
             this.#contentChangeCallbacks[i](this, text);
         }
@@ -209,6 +212,11 @@ export class FlowNote {
 
         camera.graphSpaceToScreenSpace(this.#position, this.#tempPosition);
         CopyVector2(this.#lastRenderedBox.Position, this.#tempPosition)
+
+        if (this.#parsedForTheme !== themeVersion()) {
+            this.#document = BuildMarkdown(this.#originalText);
+            this.#parsedForTheme = themeVersion();
+        }
 
         const startY = this.#tempPosition.y;
         const lineSpacing = Theme.Note.EntrySpacing * camera.zoom;

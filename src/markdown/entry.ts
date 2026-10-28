@@ -82,28 +82,26 @@ export class CodeBlockEntry {
     render(ctx: CanvasRenderingContext2D, position: Vector2, scale: number, maxWidth: number): number {
         this.#calculateLayout(ctx, maxWidth);
 
-        let padding = Theme.Note.CodeBlock.Padding * scale;
+        const padding = Theme.Note.CodeBlock.Padding * scale;
+        const lineCount = this.#calculatedEntries.Count();
+        const lastTop = lineCount === 0 ? 0 : this.#calculatedPositions.At(lineCount - 1).y;
+        const contentHeight = lineCount === 0 ? 0 : (lastTop + this.#text.style().getSize()) * scale;
+        const height = contentHeight + (padding * 2);
 
-        let max = 0;
-        for (let i = 0; i < this.#calculatedEntries.Count(); i++) {
-            const pos = this.#calculatedPositions.At(i);
-            max = Math.max(max, pos.y * scale)
-        }
-
-        const y = position.y + max + (scale * 5)
         ctx.fillStyle = Theme.Note.CodeBlock.BackgroundColor;
         ctx.beginPath();
         ctx.roundRect(
             position.x,
             position.y,
             maxWidth * scale,
-            max + (padding * 2),
+            height,
             Theme.Note.CodeBlock.BorderRadius * scale
         );
         ctx.fill();
 
-
-        for (let i = 0; i < this.#calculatedEntries.Count(); i++) {
+        const baseline = ctx.textBaseline;
+        ctx.textBaseline = "top";
+        for (let i = 0; i < lineCount; i++) {
             const entry = this.#calculatedEntries.At(i);
             const pos = this.#calculatedPositions.At(i);
 
@@ -111,12 +109,10 @@ export class CodeBlockEntry {
                 x: (pos.x * scale) + position.x + padding,
                 y: (pos.y * scale) + position.y + padding
             });
-
-            max = Math.max(max, pos.y * scale)
         }
+        ctx.textBaseline = baseline;
 
-
-        return max + (padding * 2);
+        return height;
     }
 }
 

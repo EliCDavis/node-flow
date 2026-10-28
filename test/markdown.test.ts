@@ -149,12 +149,12 @@ describe('markdown: code', () => {
         const entries = BuildMarkdown('```\nlet a = *b*;\n```');
         assert.strictEqual(entries.length, 1);
         assert.ok(entries[0] instanceof CodeBlockEntry, `got ${entries[0].constructor.name}`);
-        assert.strictEqual(contentOf(entries[0]), 'let a = *b*;\n');
+        assert.strictEqual(contentOf(entries[0]), 'let a = *b*;');
     });
 
     it('keeps more than one line of a fenced block', () => {
         const entries = BuildMarkdown('```\none\ntwo\n```');
-        assert.strictEqual(contentOf(entries[0]), 'one\ntwo\n');
+        assert.strictEqual(contentOf(entries[0]), 'one\ntwo');
     });
 
     it('carries on after a fenced block', () => {

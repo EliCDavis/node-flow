@@ -314,9 +314,10 @@ export class MarkdownSyntaxParser {
         this.#inc(); // puts us on the 3rd
         this.#inc(); // puts us on the next token
 
-        const codeBlockText = this.#originalText.substring(start as number, end);
+        const codeBlockText = this.#originalText.substring(start as number, end).replace(/\r?\n$/, "");
         const entryText = new Text(codeBlockText);
         this.#assignStandardStyling([entryText])
+        entryText.setColor(Theme.Note.CodeBlock.FontColor);
         return new CodeBlockEntry(entryText)
     }
 

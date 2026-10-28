@@ -1,3 +1,5 @@
+import { Theme } from "./theme";
+
 export interface PopupConfig {
     title: string;
     options: Array<string>;
@@ -58,11 +60,11 @@ export class Popup {
 
     Show(): void {
         this.#popup = document.createElement('div');
-        this.#popup.style.cssText = 'position:absolute;top:0;width:100%;display:flex;height:100%;justify-content:center;align-items:center;background-color:#00000070;';
+        this.#popup.style.cssText = `position:absolute;top:0;width:100%;display:flex;height:100%;justify-content:center;align-items:center;background-color:${Theme.Popup.Backdrop};`;
         document.body.appendChild(this.#popup);
 
         const container = document.createElement('div');
-        container.style.cssText = 'background-color:#000;color:white;font-family:Verdana;border-radius:8px;padding:16px;';
+        container.style.cssText = `background-color:${Theme.Popup.BackgroundColor};color:${Theme.Popup.FontColor};font-family:${Theme.Popup.FontFamily};border-radius:${Theme.Popup.BorderRadius}px;padding:16px;`;
         this.#popup.appendChild(container);
 
         const title = document.createElement("h2");

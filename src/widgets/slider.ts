@@ -1,216 +1,101 @@
 import { Theme } from "../theme";
-import { TextAlign } from "../styles/canvasTextAlign";
-import { TextStyle, TextStyleConfig, TextStyleFallback } from "../styles/text";
-import { Box } from '../types/box';
-import { CopyVector2, Vector2, Zero } from "../types/vector2";
+import { Box } from "../types/box";
 import { Clamp, Clamp01 } from "../utils/math";
-import { height, startingWidgetValue, width } from "./widget";
-import { TextBaseline } from "../styles/canvasTextBaseline";
 import { FlowNode } from "../node";
+import { CursorStyle } from "../styles/cursor";
+import { drawFieldBox, drawFieldText } from "./field";
+import { formatNumber } from "./number";
+import { ValueWidget, ValueWidgetConfig } from "./value";
+import { WidgetPointer } from "./widget";
 
-export interface SliderWidgetConfig {
-
-    property?: string;
-
+export interface SliderWidgetConfig extends ValueWidgetConfig<number> {
     min?: number;
 
     max?: number;
 
-    value?: number;
-
-    backgroundColor?: string;
-
-    borderColor?: string;
-
-    fillColor?: string;
-
-    textStyle?: TextStyleConfig;
-
-    change?: (newValue: number) => void;
-
-    release?: (newValue: number) => void;
-
     snapIncrement?: number;
 
+    fillColor?: string;
 }
 
-export class SliderWidget {
-
-    // Data Variables =========================================================
+export class SliderWidget extends ValueWidget<number> {
 
     #min: number;
 
     #max: number;
 
-    #value: number;
-
-    #text: string;
-
     #snapIncrement?: number;
 
-    #node: FlowNode;
+    #fillColor: string | undefined;
 
-    #nodeProperty: string | undefined;
-
-    // Callbacks ==============================================================
-
-    #change?: (newValue: number) => void;
-
-    #release?: (newValue: number) => void;
-
-    // Styling Variables ======================================================
-
-    #textStyle: TextStyle
-
-    #backgroundColor: string;
-
-    #borderColor: string;
-
-    #fillColor: string;
-
-    // Runtime Variables ======================================================
-
-    #lastMousePosition: Vector2;
-
-    #clickStartMousePosition: Vector2;
-
-    #clicking: boolean;
+    #startValue = 0;
 
     constructor(node: FlowNode, config?: SliderWidgetConfig) {
-        this.#node = node;
-        this.#value = 0;
-        this.#min = config?.min === undefined ? 0 : config?.min;
-        this.#max = config?.max === undefined ? 1 : config?.max;
+        const min = config?.min ?? 0;
+        const max = config?.max ?? 1;
+        super(node, { ...config, value: config?.value === undefined ? undefined : Clamp(config.value, min, max) }, min);
+        this.#min = min;
+        this.#max = max;
         this.#snapIncrement = config?.snapIncrement;
-        this.#nodeProperty = config?.property;
-        this.#text = "";
-        
-        this.#release = config?.release;
-
-        this.#backgroundColor = config?.backgroundColor === undefined ? Theme.Widget.BackgroundColor : config?.backgroundColor;
-        this.#fillColor = config?.fillColor === undefined ? Theme.Widget.Slider.FillColor : config?.fillColor;
-        this.#borderColor = config?.borderColor === undefined ? Theme.Widget.Border.Color : config?.borderColor;
-        this.#textStyle = new TextStyle(TextStyleFallback(config?.textStyle, {
-            color: Theme.Widget.FontColor,
-        }));
-        this.#lastMousePosition = Zero();
-        this.#clickStartMousePosition = Zero();
-        this.#clicking = false;
-
-
-        if (config?.property !== undefined && config?.property !== null) {
-            node.addPropertyChangeListener(config.property, (oldVal, newVal) => {
-                this.SetValue(newVal);
-            });
-        }
-
-        this.SetValue(startingWidgetValue(node, this.#nodeProperty, config?.value, 0));
-
-        // Setup change callback after we set the initial value to prevent the callback from being 
-        this.#change = config?.change;
+        this.#fillColor = config?.fillColor;
     }
 
-    SetValue(newValue: number): void {
-        const cleanedValue = Clamp(newValue, this.#min, this.#max);
-        if (Object.is(this.#value, cleanedValue)) {
-            return;
-        }
-
-        this.#value = cleanedValue;
-
-        if (this.#nodeProperty) {
-            this.#node.setProperty(this.#nodeProperty, this.#value);
-        }
-
-        this.#text = this.#value.toFixed(3);
-        if (this.#change !== undefined) {
-            this.#change(this.#value);
-        }
+    Cursor(): CursorStyle {
+        return CursorStyle.EWResize;
     }
 
-    Size(): Vector2 {
-        return { "x": width, "y": height }
+    setValue(value: number): void {
+        super.setValue(Clamp(value, this.#min, this.#max));
     }
 
-    ClickStart(): void {
-        this.#clicking = true;
-        CopyVector2(this.#clickStartMousePosition, this.#lastMousePosition)
-    }
+    protected render(ctx: CanvasRenderingContext2D, box: Box, scale: number): void {
+        drawFieldBox(ctx, box, scale, { input: true, hovered: this.hovered() || this.pressed(), value: "" });
 
-    ClickEnd(): void {
-        this.#clicking = false;
-        if (this.#release !== undefined) {
-            this.#release(this.#value);
-        }
-    }
-
-    Draw(ctx: CanvasRenderingContext2D, position: Vector2, scale: number, mousePosition: Vector2 | undefined): Box {
-        const scaledWidth = width * scale;
-        const scaledHeight = height * scale;
-
-        const scaledBorderThickness = Theme.Widget.Border.Size * scale;
-
-        // Render background
-        ctx.fillStyle = this.#backgroundColor;
-        ctx.strokeStyle = this.#borderColor;
-        ctx.lineWidth = scaledBorderThickness;
+        const border = Theme.Widget.Border.Size * scale;
+        const fill = Clamp01((this.value() - this.#min) / (this.#max - this.#min));
+        ctx.fillStyle = this.#fillColor ?? Theme.Widget.Slider.FillColor;
         ctx.beginPath();
         ctx.roundRect(
-            position.x,
-            position.y,
-            scaledWidth,
-            scaledHeight,
-            Theme.Widget.Border.Radius * scale
-        );
-        ctx.fill();
-        ctx.stroke();
-
-        // Render Fill
-        const fill = Clamp01((this.#value - this.#min) / (this.#max - this.#min));
-        ctx.fillStyle = this.#fillColor;
-        ctx.beginPath();
-        ctx.roundRect(
-            position.x + (scaledBorderThickness / 2),
-            position.y + (scaledBorderThickness / 2),
-            (scaledWidth * fill) - scaledBorderThickness,
-            scaledHeight - scaledBorderThickness,
+            box.Position.x + (border / 2),
+            box.Position.y + (border / 2),
+            Math.max(0, (box.Size.x * fill) - border),
+            box.Size.y - border,
             Theme.Widget.Border.Radius * scale
         );
         ctx.fill();
 
-        // Render Number
-        ctx.textAlign = TextAlign.Center;
-        ctx.textBaseline = TextBaseline.Middle;
-        this.#textStyle.setupStyle(ctx, scale);
-        ctx.fillText(
-            this.#text,
-            position.x + (scaledWidth / 2),
-            position.y + (scaledHeight / 2),
-        );
+        drawFieldText(ctx, box, scale, {
+            input: true,
+            hovered: false,
+            label: this.label(),
+            value: formatNumber(Number(this.value().toFixed(3))),
+        });
+    }
 
-        // Update value based on mouse position
-        if (mousePosition !== undefined) {
-            CopyVector2(this.#lastMousePosition, mousePosition);
-            if (this.#clicking) {
-                const min = position.x + (scaledBorderThickness / 2);
-                const max = min + scaledWidth - scaledBorderThickness;
-                const p = Clamp01((this.#lastMousePosition.x - min) / (max - min));
+    protected onPointerDown(pointer: WidgetPointer): void {
+        this.#startValue = this.value();
+        this.input(this.#valueAt(pointer.position.x));
+    }
 
-                let value = (p * (this.#max - this.#min)) + this.#min;
-                if (this.#snapIncrement !== undefined) {
-                    value = Math.round(value / this.#snapIncrement) * this.#snapIncrement;
-                }
+    protected onPointerMove(pointer: WidgetPointer): void {
+        this.input(this.#valueAt(pointer.position.x));
+    }
 
-                this.SetValue(value);
-            }
+    protected onPointerUp(): void {
+        this.commit(this.value(), this.#startValue);
+    }
+
+    #valueAt(x: number): number {
+        const box = this.box();
+        const border = Theme.Widget.Border.Size * this.scale();
+        const min = box.Position.x + (border / 2);
+        const max = min + box.Size.x - border;
+        const p = Clamp01((x - min) / (max - min));
+
+        let value = (p * (this.#max - this.#min)) + this.#min;
+        if (this.#snapIncrement !== undefined) {
+            value = Math.round(value / this.#snapIncrement) * this.#snapIncrement;
         }
-
-        return {
-            Position: { x: position.x, y: position.y },
-            Size: {
-                x: scaledWidth,
-                y: scaledHeight
-            }
-        };
+        return Clamp(value, this.#min, this.#max);
     }
 }

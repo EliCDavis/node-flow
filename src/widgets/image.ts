@@ -1,8 +1,8 @@
 import { requestRender } from "../render_scheduler";
+import { CursorStyle } from "../styles/cursor";
 import { Box } from "../types/box";
-import { CopyVector2, Vector2 } from "../types/vector2";
-
-const margin = 15;
+import { Vector2 } from "../types/vector2";
+import { WidgetBase } from "./widget";
 
 export interface ImageWidgetConfig {
     image?: string;
@@ -11,66 +11,11 @@ export interface ImageWidgetConfig {
     blob?: Blob;
 }
 
-/**
- *   constructor(lightNode, nodeManager, id, parameterData, app) {
-        this.lightNode = lightNode;
-        this.id = id;
-        this.app = app;
-        this.lightNode.title = parameterData.name;
-
-        this.lightNode.onDropFile = (file) => {
-            // console.log(file)
-            var reader = new FileReader();
-            reader.onload = (evt) => {
-                console.log(evt.target.result)
-                nodeManager.nodeParameterChanged({
-                    id: id,
-                    data: evt.target.result,
-                    binary: true
-                });
-            }
-            reader.readAsArrayBuffer(file);
-
-            const url = URL.createObjectURL(file);
-            // this.loadImage(this._url, function (img) {
-            //     that.size[1] = (img.height / img.width) * that.size[0];
-            // });
-            this.loadImgFromURL(url);
-        }
-    }
-
-    loadImgFromURL(url) {
-        const img = document.createElement("img");
-        img.src = url;
-        img.onload = () => {
-            // if (callback) {
-            // callback(this);
-            // }
-            // console.log("Image loaded, size: " + img.width + "x" + img.height);
-            // this.dirty = true;
-            // that.boxcolor = "#9F9";f
-            // that.setDirtyCanvas(true);
-            this.lightNode.widgets[0].image = img
-            this.lightNode.setSize(this.lightNode.computeSize());
-        };
-        img.onerror = () => {
-            console.log("error loading the image:" + url);
-        }
-    }
-
-    update(parameterData) {
-        console.log("image parameter", parameterData)
-        const curVal = parameterData.currentValue;
-        this.app.RequestManager.getParameterValue(this.id, (response) => {
-            const url = URL.createObjectURL(response);
-            this.loadImgFromURL(url)
-        })
-    }
- */
-
-export class ImageWidget {
+export class ImageWidget extends WidgetBase {
 
     #url: string | undefined;
+
+    #ownedUrl: string | undefined;
 
     #image: HTMLImageElement | undefined;
 
@@ -79,6 +24,7 @@ export class ImageWidget {
     #maxHeight: number;
 
     constructor(config?: ImageWidgetConfig) {
+        super();
         this.#maxWidth = config?.maxWidth === undefined ? 150 : config?.maxWidth;
         this.#maxHeight = config?.maxHeight === undefined ? 150 : config?.maxHeight;
         if (config?.image) {
@@ -89,24 +35,35 @@ export class ImageWidget {
     }
 
     SetBlob(blob: Blob) {
-        const urlCreator = window.URL || window.webkitURL;
-        const imageUrl = urlCreator.createObjectURL(blob);
-        this.SetUrl(imageUrl);
+        const url = URL.createObjectURL(blob);
+        this.SetUrl(url);
+        this.#ownedUrl = url;
     }
 
     SetUrl(url: string) {
+        if (this.#ownedUrl !== undefined) {
+            URL.revokeObjectURL(this.#ownedUrl);
+            this.#ownedUrl = undefined;
+        }
         this.#image = undefined;
         this.#url = url;
 
         const img = document.createElement("img");
         img.src = url;
         img.onload = () => {
+            if (this.#url !== url) {
+                return;
+            }
             this.#image = img;
             requestRender();
         };
         img.onerror = (event) => {
             console.log("error loading image:", url, event);
         }
+    }
+
+    Cursor(): CursorStyle {
+        return CursorStyle.Default;
     }
 
     Size(): Vector2 {
@@ -132,34 +89,19 @@ export class ImageWidget {
         }
     }
 
-    ClickStart(): void {
-    }
-
-    ClickEnd(): void {
-    }
-
-    Draw(ctx: CanvasRenderingContext2D, position: Vector2, scale: number, mousePosition: Vector2 | undefined): Box {
-        const size = this.Size();
-        const box: Box = {
-            Position: { x: 0, y: 0 },
-            Size: {
-                x: size.x * scale,
-                y: size.y * scale,
-            }
-        }
-        CopyVector2(box.Position, position);
-
+    protected render(ctx: CanvasRenderingContext2D, box: Box, scale: number): void {
         if (!this.#image) {
-            return box;
+            return;
         }
-
+        const size = this.Size();
+        const w = size.x * scale;
+        const h = size.y * scale;
         ctx.drawImage(
             this.#image,
-            position.x,
-            position.y,
-            box.Size.x,
-            box.Size.y
+            box.Position.x + ((box.Size.x - w) / 2),
+            box.Position.y,
+            w,
+            h
         );
-        return box;
     }
 }

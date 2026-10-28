@@ -35,14 +35,15 @@ describe('widget construction', () => {
 
     it('does not fire a slider callback for its initial value', () => {
         let fired = 0;
-        new SliderWidget(stubNode(), { value: 7, min: 0, max: 10, change: () => { fired++; } });
+        new SliderWidget(stubNode(), { value: 7, min: 0, max: 10, callback: () => { fired++; }, onInput: () => { fired++; } });
         assert.equal(fired, 0);
     });
 
-    it('still fires the number callback on a real change', () => {
+    it('does not fire the number callback for a value set from code', () => {
         const values: Array<number> = [];
         const widget = new NumberWidget(stubNode(), { value: 42, callback: (v) => { values.push(v); } });
-        widget.Set(43);
-        assert.deepEqual(values, [43]);
+        widget.setValue(43);
+        assert.equal(widget.value(), 43);
+        assert.deepEqual(values, []);
     });
 });

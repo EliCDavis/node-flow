@@ -1,207 +1,62 @@
 import { Theme } from "../theme";
-import { Box, InBox } from "../types/box";
-import { CopyVector2, Vector2 } from "../types/vector2";
-import { height, startingWidgetValue, width } from "./widget";
-import { TextBoxStyle, TextBoxStyleConfig, TextBoxStyleWithFallback } from "../styles/textBox";
+import { Box } from "../types/box";
 import { FlowNode } from "../node";
+import { drawFieldBox, widgetFont } from "./field";
+import { ValueWidget, ValueWidgetConfig } from "./value";
+import { fitString } from "../utils/string";
 
-export interface ToggleStyleConfig {
-    idle?: TextBoxStyleConfig,
-    hover?: TextBoxStyleConfig,
-    lightColor?: string;
-    lightBorderColor?: string;
-    lightBlur?: number;
+export interface ToggleWidgetConfig extends ValueWidgetConfig<boolean> {
+    onColor?: string;
+    offColor?: string;
 }
 
-export interface ToggleWidgetConfig {
-    property?: string;
-    value?: boolean;
-    text?: string;
-    callback?: () => void;
-    enabledStyle?: ToggleStyleConfig;
-    disabledStyle?: ToggleStyleConfig;
-}
+export class ToggleWidget extends ValueWidget<boolean> {
 
-class ToggleStyle {
+    #onColor: string;
 
-    #idleStyle: TextBoxStyle;
-
-    #hoverStyle: TextBoxStyle;
-
-    #lightColor: string;
-
-    #lightBorderColor: string;
-
-    #lightBlur?: number;
-
-    #box: Box;
-
-    constructor(config?: ToggleStyleConfig) {
-        this.#idleStyle = new TextBoxStyle(TextBoxStyleWithFallback(config?.idle, {
-            box: {
-                color: Theme.Widget.BackgroundColor,
-                border: {
-                    size: Theme.Widget.Border.Size,
-                    color: Theme.Widget.Border.Color,
-                }
-            },
-            text: { color: Theme.Widget.FontColor },
-        }));
-        this.#hoverStyle = new TextBoxStyle(TextBoxStyleWithFallback(config?.hover, {
-            box: {
-                color: Theme.Widget.Hover.BackgroundColor,
-                border: {
-                    size: Theme.Widget.Border.Size,
-                    color: Theme.Widget.Border.Color,
-                }
-            },
-            text: { color: Theme.Widget.FontColor },
-        }));
-        this.#lightColor = config?.lightColor === undefined ? "#222222" : config.lightColor;
-        this.#lightBorderColor = config?.lightBorderColor === undefined ? "black" : config.lightBorderColor;
-        this.#lightBlur = config?.lightBlur;
-
-        this.#box = {Position: { x: 0, y: 0 }, Size: { x: 0, y: 0 } };
-    }
-
-    Draw(ctx: CanvasRenderingContext2D, pos: Vector2, scale: number, text: string, mousePosition: Vector2 | undefined): Box {
-        const scaledWidth = width * scale;
-        const scaledHeight = height * scale;
-        this.#box.Size.x = scaledWidth;
-        this.#box.Size.y = scaledHeight;
-        CopyVector2(this.#box.Position, pos);
-
-        // Background
-        let style: TextBoxStyle = this.#idleStyle;
-        if (mousePosition !== undefined) {
-            if (InBox(this.#box, mousePosition)) {
-                style = this.#hoverStyle;
-            }
-        }
-        style.Draw(ctx, this.#box, scale, text);
-
-        // Light
-        const lightScale = Math.min(scaledWidth, scaledHeight);
-        ctx.strokeStyle = this.#lightBorderColor;
-        ctx.fillStyle = this.#lightColor
-        ctx.beginPath();
-        ctx.roundRect(
-            pos.x + (lightScale * .2),
-            pos.y + (lightScale * .2),
-            lightScale * .6,
-            lightScale * .6,
-            Theme.Widget.Border.Radius * scale
-        );
-        if (this.#lightBlur) {
-            ctx.shadowBlur = this.#lightBlur * scale;
-            ctx.shadowColor = this.#lightColor;
-        }
-        ctx.fill();
-        if (this.#lightBlur) {
-            ctx.shadowBlur = 0;
-        }
-        // ctx.stroke();
-
-        return this.#box
-    }
-}
-
-export class ToggleWidget {
-
-    #node: FlowNode;
-
-    #nodeProperty: string | undefined;
-
-    #value: boolean;
-
-    #text: string;
-
-    #enabledStyle: ToggleStyle;
-
-    #disabledStyle: ToggleStyle;
-
-    #callback?: (value: boolean) => void;
+    #offColor: string;
 
     constructor(node: FlowNode, config?: ToggleWidgetConfig) {
-        this.#value = false;
-
-        this.#node = node;
-        this.#nodeProperty = config?.property;
-        this.#text = config?.text === undefined ? "Toggle" : config?.text;
-
-        this.#enabledStyle = new ToggleStyle({
-            idle: TextBoxStyleWithFallback(config?.enabledStyle?.idle, {
-                box: {
-                    color: Theme.Widget.BackgroundColor,
-                    border: {
-                        size: Theme.Widget.Border.Size,
-                        color: Theme.Widget.Border.Color,
-                    }
-                },
-                text: { color: Theme.Widget.FontColor },
-            }),
-            lightBorderColor: config?.enabledStyle?.lightBorderColor,
-            lightColor: config?.enabledStyle?.lightColor === undefined ? "#00FF00" : config?.enabledStyle?.lightColor,
-            lightBlur: config?.enabledStyle?.lightBlur === undefined ? 15 : config?.enabledStyle?.lightBlur
-        });
-        this.#disabledStyle = new ToggleStyle({
-            idle: TextBoxStyleWithFallback(config?.disabledStyle?.idle, {
-                box: {
-                    color: Theme.Widget.BackgroundColor,
-                    border: {
-                        size: Theme.Widget.Border.Size,
-                        color: Theme.Widget.Border.Color,
-                    }
-                },
-                text: { color: Theme.Widget.FontColor },
-            }),
-            lightBorderColor: config?.disabledStyle?.lightBorderColor,
-            lightColor: config?.disabledStyle?.lightColor === undefined ? "#004400" : config?.enabledStyle?.lightColor,
-        });
-
-        this.Set(startingWidgetValue(node, this.#nodeProperty, config?.value, false));
-
-        this.#callback = config?.callback;
-
-        if (this.#nodeProperty !== undefined) {
-            this.#node.addPropertyChangeListener(this.#nodeProperty, (oldVal, newVal) => {
-                this.Set(newVal);
-            });
-        }
-    }
-
-    Size(): Vector2 {
-        return { "x": width, "y": height }
-    }
-
-    Draw(ctx: CanvasRenderingContext2D, position: Vector2, scale: number, mousePosition: Vector2 | undefined): Box {
-        let style = this.#value ? this.#enabledStyle : this.#disabledStyle;
-        return style.Draw(ctx, position, scale, this.#text, mousePosition);
+        super(node, { ...config, label: config?.label ?? "Toggle" }, false);
+        this.#onColor = config?.onColor ?? "#00FF00";
+        this.#offColor = config?.offColor ?? "#004400";
     }
 
     Toggle(): void {
-        this.Set(!this.#value);
+        const before = this.value();
+        this.commit(!before, before);
     }
 
-    Set(value: boolean): void {
-        if (this.#value === value) {
-            return;
-        }
-        this.#value = value;
+    protected render(ctx: CanvasRenderingContext2D, box: Box, scale: number): void {
+        drawFieldBox(ctx, box, scale, { hovered: this.hovered(), value: "" });
 
-        if (this.#nodeProperty !== undefined) {
-            this.#node.setProperty(this.#nodeProperty, this.#value);
+        const light = Math.min(box.Size.x, box.Size.y) * 0.6;
+        const inset = (box.Size.y - light) / 2;
+        const on = this.value();
+        ctx.fillStyle = on ? this.#onColor : this.#offColor;
+        ctx.beginPath();
+        ctx.roundRect(box.Position.x + inset, box.Position.y + inset, light, light, Theme.Widget.Border.Radius * scale);
+        if (on) {
+            ctx.shadowBlur = 15 * scale;
+            ctx.shadowColor = this.#onColor;
         }
+        ctx.fill();
+        ctx.shadowBlur = 0;
 
-        if (this.#callback !== undefined) {
-            this.#callback(this.#value);
-        }
+        const textLeft = box.Position.x + (inset * 2) + light;
+        ctx.font = widgetFont(scale);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = Theme.Widget.FontColor;
+        const room = box.Position.x + box.Size.x - textLeft - inset;
+        ctx.fillText(
+            fitString(ctx, this.label(), room),
+            textLeft + (room / 2),
+            box.Position.y + (box.Size.y / 2),
+        );
     }
 
-    ClickStart(): void {
+    protected onClick(): void {
         this.Toggle();
-    }
-
-    ClickEnd(): void {
     }
 }

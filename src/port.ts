@@ -51,6 +51,11 @@ export interface PortConfig {
      */
     acceptedTypes?: Array<string>;
 
+    /**
+     * Leaves the port off the node until something is connected to it.
+     */
+    hidden?: boolean;
+
     emptyStyle?: PortStyle;
     filledStyle?: PortStyle;
     onConnectionAdded?: ConnectionChangeCallback;
@@ -86,6 +91,28 @@ export function portConfigTypes(config: PortConfig): Array<string> {
         return config.acceptedTypes;
     }
     return [config.type === undefined ? "" : config.type];
+}
+
+export const ARRAY_SLOT_PITCH = 12;
+
+/**
+ * Which gap between a port's wires a point is nearest: 0 is above the first,
+ * `count` is below the last.
+ */
+export function arrayInsertIndex(box: Box, count: number, y: number): number {
+    if (count === 0) {
+        return 0;
+    }
+    const index = Math.round((y - box.Position.y) / (box.Size.y / count));
+    return Math.min(count, Math.max(0, index));
+}
+
+export function arraySlotCenter(box: Box, count: number, index: number): Vector2 {
+    const slots = Math.max(1, count);
+    return {
+        x: box.Position.x + (box.Size.x / 2),
+        y: box.Position.y + ((index + 0.5) * box.Size.y / slots),
+    };
 }
 
 // Calculate a color hash for an arbirary type
@@ -128,6 +155,8 @@ export class Port {
 
     #array: boolean;
 
+    #hidden: boolean;
+
     #configuredEmptyFill: string | undefined;
 
     #configuredFilledFill: string | undefined;
@@ -148,6 +177,7 @@ export class Port {
         this.#acceptedTypes = config?.acceptedTypes === undefined ? [] : config.acceptedTypes;
         this.#description = config?.description === undefined ? "" : config.description;
         this.#array = config?.array === true;
+        this.#hidden = config?.hidden === true;
         this.#configuredEmptyFill = config?.emptyStyle?.fillColor;
         this.#configuredFilledFill = config?.filledStyle?.fillColor;
 
@@ -260,9 +290,13 @@ export class Port {
         this.#refreshDataType();
     }
 
-    addConnection(connection: Connection): void {
-        const c = this.#connections.length;
-        this.#connections.push(connection);
+    addConnection(connection: Connection, index?: number): void {
+        const c = index === undefined
+            ? this.#connections.length
+            : Math.min(Math.max(index, 0), this.#connections.length);
+        const was = this.hidden();
+        this.#connections.splice(c, 0, connection);
+        this.#visibilityMayHaveChanged(was);
         for (let i = 0; i < this.#onConnectionAdded.length; i++) {
             this.#onConnectionAdded[i](connection, c, this, this.#portType, this.#node);
         }
@@ -287,6 +321,36 @@ export class Port {
         return this.#connections;
     }
 
+    /**
+     * How many wires the port has room for: one per connection on an array
+     * input, so each can be told apart and picked up on its own.
+     */
+    slots(): number {
+        if (this.#portType !== PortType.InputArray) {
+            return 1;
+        }
+        return Math.max(1, this.#connections.length);
+    }
+
+    setHidden(hidden: boolean): void {
+        const was = this.hidden();
+        this.#hidden = hidden;
+        this.#visibilityMayHaveChanged(was);
+    }
+
+    #visibilityMayHaveChanged(was: boolean): void {
+        if (was !== this.hidden() || this.#portType === PortType.InputArray) {
+            this.#node?.invalidateLayout();
+        }
+    }
+
+    /**
+     * A port asked to hide still shows while anything is connected to it.
+     */
+    hidden(): boolean {
+        return this.#hidden && this.#connections.length === 0;
+    }
+
     addConnectionRemovedListener(callback: ConnectionChangeCallback) {
         if (callback === undefined) {
             return;
@@ -297,7 +361,9 @@ export class Port {
     clearConnection(connection: Connection): void {
         const index = this.#connections.indexOf(connection);
         if (index > -1) {
+            const was = this.hidden();
             this.#connections.splice(index, 1);
+            this.#visibilityMayHaveChanged(was);
             for (let i = 0; i < this.#onConnectionRemoved.length; i++) {
                 this.#onConnectionRemoved[i](connection, index, this, this.#portType, this.#node);
             }
@@ -373,23 +439,34 @@ export class Port {
             })
         }
 
+        const slots = this.slots();
+        const height = slots === 1 ? scaledRadius * 2 : slots * ARRAY_SLOT_PITCH * camera.zoom;
         this.#box.Position.x = position.x - scaledRadius;
-        this.#box.Position.y = position.y - scaledRadius;
+        this.#box.Position.y = position.y - (height / 2);
         this.#box.Size.x = scaledRadius * 2;
-        this.#box.Size.y = scaledRadius * 2;
+        this.#box.Size.y = height;
 
         ctx.strokeStyle = style.borderColor as string;
         ctx.fillStyle = style.fillColor as string;
 
         ctx.beginPath();
         if (this.#portType === PortType.InputArray) {
-            ctx.rect(position.x - scaledRadius, position.y - scaledRadius, scaledRadius * 2, scaledRadius * 2)
+            ctx.roundRect(this.#box.Position.x, this.#box.Position.y, this.#box.Size.x, this.#box.Size.y, slots === 1 ? 0 : scaledRadius);
         } else {
             ctx.arc(position.x, position.y, scaledRadius, 0, 2 * Math.PI);
         }
         ctx.fill();
         ctx.stroke();
 
+        if (slots > 1) {
+            ctx.fillStyle = style.borderColor as string;
+            for (let i = 0; i < slots; i++) {
+                const slot = arraySlotCenter(this.#box, slots, i);
+                ctx.beginPath();
+                ctx.arc(slot.x, slot.y, scaledRadius * 0.4, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
 
         return this.#box;
     }

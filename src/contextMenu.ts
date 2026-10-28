@@ -259,11 +259,23 @@ export class ContextMenu {
 
     #openSubMenu: ContextMenu | undefined;
 
+    #bounds: Box | null = null;
 
-    public render(ctx: CanvasRenderingContext2D, pppp: Vector2, graphScale: number, mousePosition: Vector2 | undefined, openRight: boolean): ContextEntry | null {
+    #contains(point: Vector2): boolean {
+        if (this.#bounds !== null && InBox(this.#bounds, point)) {
+            return true;
+        }
+        return this.#openSubMenu !== undefined && this.#openSubMenu.#contains(point);
+    }
+
+    /**
+     * A submenu is anchored to its parent's left edge and told the parent's
+     * width, so it can open on whichever side has room.
+     */
+    public render(ctx: CanvasRenderingContext2D, anchor: Vector2, graphScale: number, mousePosition: Vector2 | undefined, openRight: boolean, parentWidth: number = 0): ContextEntry | null {
         const menuScale = 1.25;
         const scaledEntryHeight = menuScale * contextEntryHeight;
-        const scaledEntryWidth = (menuScale * 40) + (this.#getMaxWidthForText(ctx, menuScale)); // contextEntryWidth;
+        const scaledEntryWidth = (menuScale * 40) + (this.#getMaxWidthForText(ctx, menuScale));
 
         let totalScaledHeight = 0
         for (let i = 0; i < this.#groups.Count(); i++) {
@@ -271,23 +283,41 @@ export class ContextMenu {
         }
         totalScaledHeight *= menuScale;
 
-        const position = { x: 0, y: 0 };
-        CopyVector2(position, pppp)
+        const canvasWidth = ctx.canvas.clientWidth;
+        const position = { x: anchor.x, y: anchor.y };
+        let opensRight = openRight;
 
-        if (!openRight) {
-            position.x -= scaledEntryWidth;
+        if (parentWidth === 0) {
+            if (!openRight) {
+                position.x -= scaledEntryWidth;
+            }
+            if (openRight && position.x + scaledEntryWidth > canvasWidth) {
+                position.x = canvasWidth - scaledEntryWidth;
+                opensRight = false;
+            }
+        } else {
+            const rightOfParent = anchor.x + parentWidth;
+            const leftOfParent = anchor.x - scaledEntryWidth;
+            const fitsRight = rightOfParent + scaledEntryWidth <= canvasWidth;
+            const fitsLeft = leftOfParent >= 0;
+            opensRight = openRight ? (fitsRight || !fitsLeft) : (!fitsLeft && fitsRight);
+            position.x = opensRight ? rightOfParent : leftOfParent;
+            position.x = Math.max(0, Math.min(position.x, canvasWidth - scaledEntryWidth));
         }
 
-        // Clamp the position so it's not spilling off the canvas
         if (position.y + totalScaledHeight > ctx.canvas.clientHeight) {
             position.y = ctx.canvas.clientHeight - totalScaledHeight;
         }
+        position.y = Math.max(0, position.y);
 
-        let submenuOpenRight = openRight;
-        if (openRight && position.x + scaledEntryWidth > ctx.canvas.clientWidth) {
-            position.x = ctx.canvas.clientWidth - scaledEntryWidth;
-            submenuOpenRight = !submenuOpenRight;
-        }
+        this.#bounds = {
+            Position: { x: position.x, y: position.y },
+            Size: { x: scaledEntryWidth, y: totalScaledHeight },
+        };
+
+        const pointer = mousePosition !== undefined && this.#openSubMenu !== undefined && this.#openSubMenu.#contains(mousePosition)
+            ? undefined
+            : mousePosition;
 
         this.#tempBox.Size.x = scaledEntryWidth;
         this.#tempBox.Size.y = scaledEntryHeight;
@@ -305,13 +335,27 @@ export class ContextMenu {
             this.#tempBox.Position.y,
             scaledEntryWidth,
             totalScaledHeight,
-            5 * menuScale
+            Theme.ContextMenu.BorderRadius * menuScale
         );
         ctx.fill();
         ctx.shadowBlur = 0;
 
         let mouseIsOver: ContextEntry | null = null;
-        let subOpenedThisFrame = false;
+        if (pointer !== undefined) {
+            let row = 0;
+            for (let groupIndex = 0; groupIndex < this.#groups.Count(); groupIndex++) {
+                for (const entry of this.#groups.At(groupIndex).entries) {
+                    this.#tempBox.Position.y = position.y + (scaledEntryHeight * row);
+                    if (InBox(this.#tempBox, pointer)) {
+                        mouseIsOver = entry;
+                        this.#openSubMenu = entry.subMenu;
+                        this.#submenuPosition.x = position.x;
+                        this.#submenuPosition.y = this.#tempBox.Position.y;
+                    }
+                    row++;
+                }
+            }
+        }
 
         let optionsRendered = 0;
         for (let groupIndex = 0; groupIndex < this.#groups.Count(); groupIndex++) {
@@ -321,27 +365,13 @@ export class ContextMenu {
 
                 this.#tempBox.Position.y = position.y + (scaledEntryHeight * optionsRendered);
 
-                let entryMousedOver = false;
-                if (mousePosition !== undefined && InBox(this.#tempBox, mousePosition)) {
-                    mouseIsOver = entry;
-                    entryMousedOver = true
-                    if (entry.subMenu !== undefined) {
-                        this.#openSubMenu = entry.subMenu;
-                        this.#submenuPosition.x = position.x
-                        this.#submenuPosition.y = this.#tempBox.Position.y;
-                        if (submenuOpenRight) {
-                            this.#submenuPosition.x += scaledEntryWidth
-                        }
-                        subOpenedThisFrame = true;
-                    } else {
-                        this.#openSubMenu = undefined;
-                    }
-                }
+                const entryMousedOver = entry === mouseIsOver;
 
                 const itemDisabled = entry.item !== undefined
                     && entry.item.state() === ContextMenuItemState.Disabled;
 
-                if (!itemDisabled && (entryMousedOver || (this.#openSubMenu !== undefined && entry.subMenu === this.#openSubMenu))) {
+                const highlighted = !itemDisabled && (entryMousedOver || (this.#openSubMenu !== undefined && entry.subMenu === this.#openSubMenu));
+                if (highlighted) {
                     ctx.fillStyle = Theme.ContextMenu.HighlightColor;
                     ctx.beginPath();
                     ctx.roundRect(
@@ -349,7 +379,7 @@ export class ContextMenu {
                         this.#tempBox.Position.y + (scaledEntryHeight / 10),
                         scaledEntryWidth - (scaledEntryHeight / 5),
                         scaledEntryHeight - (scaledEntryHeight / 5),
-                        5 * menuScale
+                        Theme.ContextMenu.BorderRadius * menuScale
                     );
                     ctx.fill();
                 }
@@ -357,13 +387,15 @@ export class ContextMenu {
                 this.#textStyle.setupStyle(ctx, menuScale);
                 if (itemDisabled) {
                     ctx.fillStyle = Theme.ContextMenu.DisabledFontColor;
+                } else if (highlighted) {
+                    ctx.fillStyle = Theme.ContextMenu.HighlightFontColor;
                 }
                 ctx.fillText(entry.text, position.x + (scaledEntryHeight / 5), this.#tempBox.Position.y + (scaledEntryHeight / 2))
 
                 // Render arrows
                 if (entry.subMenu !== undefined) {
                     ctx.beginPath()
-                    ctx.strokeStyle = Theme.ContextMenu.FontColor;
+                    ctx.strokeStyle = highlighted ? Theme.ContextMenu.HighlightFontColor : Theme.ContextMenu.FontColor;
                     ctx.lineWidth = 1 * menuScale;
                     ctx.lineTo(position.x + scaledEntryWidth - (scaledEntryHeight / 2.5), this.#tempBox.Position.y + (scaledEntryHeight / 3))
                     ctx.lineTo(position.x + scaledEntryWidth - (scaledEntryHeight / 4), this.#tempBox.Position.y + (scaledEntryHeight / 2))
@@ -388,7 +420,7 @@ export class ContextMenu {
         }
 
         if (this.#openSubMenu !== undefined) {
-            const mouseOverSub = this.#openSubMenu.render(ctx, this.#submenuPosition, menuScale, mousePosition, submenuOpenRight)
+            const mouseOverSub = this.#openSubMenu.render(ctx, this.#submenuPosition, menuScale, mousePosition, opensRight, scaledEntryWidth)
             if (mouseOverSub !== null) {
                 mouseIsOver = mouseOverSub;
             }

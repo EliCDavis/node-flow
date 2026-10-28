@@ -1,4 +1,5 @@
 import { requestRender } from "../render_scheduler";
+import { themeVersion } from "../theme";
 import { FontWeight, TextStyle, TextStyleConfig } from "../styles/text";
 import { splitString, splitStringIntoLines } from "../utils/string";
 import { CopyVector2, ScaleVector, Vector2, Zero } from "./vector2";
@@ -11,6 +12,8 @@ export interface MultilineTextConfig {
 export class Text {
 
     #measured: boolean
+
+    #measuredForTheme = -1;
 
     #size: Vector2;
 
@@ -110,9 +113,10 @@ export class Text {
     }
 
     #measure(ctx: CanvasRenderingContext2D): void {
-        if (this.#measured) {
+        if (this.#measured && this.#measuredForTheme === themeVersion()) {
             return;
         }
+        this.#measuredForTheme = themeVersion();
 
 
         this.#style.setupStyle(ctx, 1);

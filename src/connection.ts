@@ -1,6 +1,6 @@
 import { FlowNode } from "./node";
 import { Port } from "./port";
-import { BoxCenter, InBox } from "./types/box";
+import { Box, BoxCenter, InBox } from "./types/box";
 import { Vector2, Zero } from "./types/vector2";
 import { Clamp01 } from "./utils/math";
 
@@ -134,7 +134,7 @@ export class Connection {
         }
 
         if (this.#inNode !== null) {
-            const inPortBox = this.#inNode.inputPortPosition(this.#inNodePortIndex)
+            const inPortBox = this.#inSlotBox();
             if (inPortBox === undefined) {
                 return;
             }
@@ -202,7 +202,7 @@ export class Connection {
         this.clearOutput();
     }
 
-    setInput(node: FlowNode, portIndex: number, replace?: boolean): void {
+    setInput(node: FlowNode, portIndex: number, replace?: boolean, insertAt?: number): void {
         this.#inNode = node;
         this.#inNodePortIndex = portIndex;
 
@@ -210,7 +210,7 @@ export class Connection {
         if(!!replace && port.connections().length > 0) {
             port.replaceConnection(this, 0);
         } else {
-            port.addConnection(this);
+            port.addConnection(this, insertAt);
         }
     }
 
@@ -232,9 +232,34 @@ export class Connection {
         this.#outNodePortIndex = -1;
     }
 
+    /**
+     * The part of the input port this wire lands on: the whole port, or its
+     * own slot on a port holding several wires.
+     */
+    #inSlotBox(): Box | undefined {
+        if (this.#inNode === null) {
+            return undefined;
+        }
+        const box = this.#inNode.inputPortPosition(this.#inNodePortIndex);
+        const port = this.#inNode.inputPort(this.#inNodePortIndex);
+        const slots = port.slots();
+        if (box === undefined || slots === 1) {
+            return box;
+        }
+        const index = port.connections().indexOf(this);
+        if (index === -1) {
+            return box;
+        }
+        const height = box.Size.y / slots;
+        return {
+            Position: { x: box.Position.x, y: box.Position.y + (index * height) },
+            Size: { x: box.Size.x, y: height },
+        };
+    }
+
     mouseOverPort(mousePosition: Vector2): Port | null {
         if (this.#inNode !== null) {
-            const inPortBox = this.#inNode.inputPortPosition(this.#inNodePortIndex)
+            const inPortBox = this.#inSlotBox();
             if (inPortBox !== undefined && InBox(inPortBox, mousePosition)) {
                 return this.#inNode.inputPort(this.#inNodePortIndex)
             }

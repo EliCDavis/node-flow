@@ -1,154 +1,122 @@
-import { Theme } from "../theme";
-import { Popup } from "../popup";
-import { TextBoxStyle, TextBoxStyleConfig, TextBoxStyleWithFallback } from "../styles/textBox";
-import { Box, InBox } from '../types/box';
-import { CopyVector2, Vector2 } from "../types/vector2";
-import { height, startingWidgetValue, width } from "./widget";
 import { FlowNode } from "../node";
+import { CursorStyle } from "../styles/cursor";
+import { Box } from "../types/box";
+import { drawField } from "./field";
+import { editInPlace } from "./inplace";
+import { ValueWidget, ValueWidgetConfig } from "./value";
+import { WidgetPointer } from "./widget";
 
-export interface NumberWidgetConfig {
-    value?: number;
+export interface NumberWidgetConfig extends ValueWidgetConfig<number> {
+    /**
+     * How much the value moves per pixel dragged. Left out, it scales with
+     * the value's size.
+     */
+    step?: number;
 
-    property?: string;
+    integer?: boolean;
 
-    idleBoxStyle?: TextBoxStyleConfig;
+    min?: number;
 
-    highlightBoxStyle?: TextBoxStyleConfig;
-
-    callback?: (newNumber: number) => void;
+    max?: number;
 }
 
-export class NumberWidget {
+const DRAG_THRESHOLD = 3;
 
-    #node: FlowNode;
+export class NumberWidget extends ValueWidget<number> {
 
-    #nodeProperty: string | undefined;
+    #step: number | undefined;
 
-    #value: number;
+    #integer: boolean;
 
-    #idleBoxStyle: TextBoxStyle;
+    #min: number;
 
-    #highlightBoxStyle: TextBoxStyle;
+    #max: number;
 
-    #text: string;
+    #startX = 0;
 
-    #callback?: (newNumber: number) => void;
+    #startValue = 0;
+
+    #dragging = false;
+
+    #dragged = false;
 
     constructor(node: FlowNode, config?: NumberWidgetConfig) {
-        this.#value = 0;
-        this.#text = "0";
-
-        this.#node = node;
-        this.#nodeProperty = config?.property;
-        this.#idleBoxStyle = new TextBoxStyle(TextBoxStyleWithFallback(config?.idleBoxStyle, {
-            box: {
-                color: Theme.Widget.BackgroundColor,
-                border: {
-                    size: Theme.Widget.Border.Size,
-                    color: Theme.Widget.Border.Color,
-                },
-                radius: Theme.Widget.Border.Radius
-            },
-            text: { color: Theme.Widget.FontColor },
-        }));
-        this.#highlightBoxStyle = new TextBoxStyle(TextBoxStyleWithFallback(config?.highlightBoxStyle, {
-            box: {
-                color: Theme.Widget.Hover.BackgroundColor,
-                border: {
-                    size: Theme.Widget.Border.Size,
-                    color: Theme.Widget.Border.Color,
-                },
-                radius: Theme.Widget.Border.Radius
-            },
-            text: { color: Theme.Widget.FontColor },
-        }));
-        this.Set(startingWidgetValue(node, this.#nodeProperty, config?.value, 0));
-
-        this.#callback = config?.callback;
-
-        if (this.#nodeProperty !== undefined) {
-            this.#node.addPropertyChangeListener(this.#nodeProperty, (oldVal, newVal) => {
-                this.Set(newVal);
-            });
-        }
-
+        super(node, config, 0);
+        this.#step = config?.step;
+        this.#integer = config?.integer === true;
+        this.#min = config?.min ?? -Infinity;
+        this.#max = config?.max ?? Infinity;
     }
 
-    Size(): Vector2 {
-        return { "x": width, "y": height }
+    Cursor(): CursorStyle {
+        return CursorStyle.EWResize;
     }
 
-    Set(newNumber: number): void {
-        if (Object.is(this.#value, newNumber)) {
+    protected render(ctx: CanvasRenderingContext2D, box: Box, scale: number): void {
+        drawField(ctx, box, scale, {
+            input: true,
+            hovered: this.hovered() || this.pressed(),
+            label: this.label(),
+            value: formatNumber(this.value()),
+        });
+    }
+
+    protected onPointerDown(pointer: WidgetPointer): void {
+        this.#startX = pointer.position.x;
+        this.#startValue = this.value();
+        this.#dragging = false;
+        this.#dragged = false;
+    }
+
+    protected onPointerMove(pointer: WidgetPointer): void {
+        const dx = pointer.position.x - this.#startX;
+        if (!this.#dragging && Math.abs(dx) < DRAG_THRESHOLD) {
             return;
         }
-
-        this.#value = newNumber;
-
-        if (this.#nodeProperty !== undefined) {
-            this.#node.setProperty(this.#nodeProperty, this.#value);
-        }
-
-        if (this.#callback !== undefined) {
-            this.#callback(this.#value);
-        }
-
-        // https://stackoverflow.com/questions/5765398/whats-the-best-way-to-convert-a-number-to-a-string-in-javascript
-        this.#text = '' + parseFloat(this.#value.toPrecision(6));
+        this.#dragging = true;
+        this.input(this.#clean(this.#startValue + (dx * this.#stepFor(this.#startValue))));
     }
 
-    ClickStart(): void {
+    protected onPointerUp(): void {
+        this.#dragged = this.#dragging;
+        if (this.#dragging) {
+            this.#dragging = false;
+            this.commit(this.value(), this.#startValue);
+        }
     }
 
-    ClickEnd(): void {
-        let input: HTMLInputElement | null = null;
-
-        const setOption = "Set";
-        const cancelOption = "Cancel";
-        const popup = new Popup({
-            title: "Set Number",
-            options: [setOption, cancelOption],
-            content: () => {
-                const container = document.createElement('div');
-                input = document.createElement('input')
-                input.type = "number";
-                input.valueAsNumber = this.#value;
-                container.append(input);
-                return container;
-            },
-            onClose: (button: string | null): void => {
-                if (button !== setOption || input === null) {
-                    return;
+    protected onClick(): void {
+        if (this.#dragged) {
+            return;
+        }
+        const before = this.value();
+        editInPlace({
+            canvas: this.canvas(),
+            box: this.box(),
+            scale: this.scale(),
+            value: String(before),
+            onCommit: (text) => {
+                const parsed = Number.parseFloat(text);
+                if (Number.isFinite(parsed)) {
+                    this.commit(this.#clean(parsed), before);
                 }
-
-                this.Set(input.valueAsNumber);
             },
         });
-
-        popup.Show();
     }
 
-
-    Draw(ctx: CanvasRenderingContext2D, position: Vector2, scale: number, mousePosition: Vector2 | undefined): Box {
-        const box = {
-            Position: { x: 0, y: 0 },
-            Size: {
-                x: width * scale,
-                y: height * scale
-            }
-        };
-        CopyVector2(box.Position, position);
-
-        let style: TextBoxStyle = this.#idleBoxStyle;
-
-        if (mousePosition !== undefined) {
-            if (InBox(box, mousePosition)) {
-                style = this.#highlightBoxStyle;
-            }
+    #stepFor(value: number): number {
+        if (this.#step !== undefined) {
+            return this.#step;
         }
-
-        style.DrawUnderline(ctx, box, scale, this.#text)
-
-        return box;
+        return Math.max(Math.abs(value) * 0.01, this.#integer ? 0.1 : 0.01);
     }
+
+    #clean(value: number): number {
+        const rounded = this.#integer ? Math.round(value) : value;
+        return Math.min(this.#max, Math.max(this.#min, rounded));
+    }
+}
+
+export function formatNumber(value: number): string {
+    return '' + parseFloat(value.toPrecision(6));
 }

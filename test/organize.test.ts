@@ -1,5 +1,6 @@
 import * as assert from 'assert';
-import { assignLayers, orderWithinLayers, topologicalOrder } from '../src/organize';
+import { assignLayers, findPieces, layoutGraph, orderWithinLayers, topologicalOrder } from '../src/organize';
+import { Vector2 } from '../src/types/vector2';
 
 /** Builds the upstream/downstream maps Organize works from. */
 function graph(edges: Array<[number, number]>, nodes: Array<number>) {
@@ -152,5 +153,120 @@ describe('topologicalOrder', () => {
 
         assert.ok(order.indexOf(0) < order.indexOf(1));
         assert.ok(order.indexOf(1) < order.indexOf(2));
+    });
+});
+
+describe('layoutGraph', () => {
+    type Rect = { x: number, y: number, w: number, h: number };
+
+    function lay(edges: Array<[number, number]>, nodes: Array<number>, heights: Record<number, number> = {}) {
+        const { upstream, downstream } = graph(edges, nodes);
+        const sizes = new Map<number, Vector2>();
+        for (const node of nodes) {
+            sizes.set(node, { x: 100, y: heights[node] ?? 40 });
+        }
+        const positions = layoutGraph(nodes, upstream, downstream, sizes);
+        const rect = (node: number): Rect => {
+            const p = positions.get(node) as Vector2;
+            const s = sizes.get(node) as Vector2;
+            return { x: p.x, y: p.y, w: s.x, h: s.y };
+        };
+        return { positions, rect, centreY: (node: number) => rect(node).y + rect(node).h / 2 };
+    }
+
+    function around(rects: Array<Rect>): Rect {
+        const x = Math.min(...rects.map((r) => r.x));
+        const y = Math.min(...rects.map((r) => r.y));
+        return {
+            x, y,
+            w: Math.max(...rects.map((r) => r.x + r.w)) - x,
+            h: Math.max(...rects.map((r) => r.y + r.h)) - y,
+        };
+    }
+
+    function overlaps(a: Rect, b: Rect): boolean {
+        return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    }
+
+    it('lays every node out exactly once', () => {
+        const nodes = [0, 1, 2, 3, 4, 5, 6];
+        const { positions } = lay([[0, 1], [1, 2], [3, 4]], nodes);
+        assert.deepStrictEqual([...positions.keys()].sort(), nodes);
+    });
+
+    it('keeps separate pieces apart', () => {
+        const { rect } = lay([[0, 1], [1, 2], [3, 4], [4, 5]], [0, 1, 2, 3, 4, 5]);
+        const first = around([0, 1, 2].map(rect));
+        const second = around([3, 4, 5].map(rect));
+        assert.ok(!overlaps(first, second), 'the pieces share space');
+    });
+
+    it('gathers unconnected nodes away from the pieces', () => {
+        const { rect } = lay([[0, 1], [1, 2]], [0, 3, 1, 4, 2, 5]);
+        const piece = around([0, 1, 2].map(rect));
+        const loose = around([3, 4, 5].map(rect));
+        assert.ok(!overlaps(piece, loose), 'a loose node sits inside a piece');
+    });
+
+    it('gives every branch of a tree its own band', () => {
+        const { rect } = lay([[1, 0], [2, 0], [3, 1], [4, 1], [5, 2], [6, 2]], [0, 1, 2, 3, 4, 5, 6]);
+        const first = around([1, 3, 4].map(rect));
+        const second = around([2, 5, 6].map(rect));
+        assert.ok(first.y + first.h <= second.y || second.y + second.h <= first.y, 'the branches interleave');
+    });
+
+    it('lines a tree node up with the single input feeding it', () => {
+        const { centreY } = lay([[0, 1], [1, 2]], [0, 1, 2], { 0: 40, 1: 120, 2: 60 });
+        assert.strictEqual(centreY(0), centreY(1));
+        assert.strictEqual(centreY(1), centreY(2));
+    });
+
+    it('puts an input in the column right before what it feeds', () => {
+        const edges: Array<[number, number]> = [[0, 1], [1, 2], [2, 3], [0, 3], [4, 3]];
+        const { rect } = lay(edges, [0, 1, 2, 3, 4]);
+        assert.strictEqual(rect(4).x, rect(2).x);
+    });
+
+    it('lines a node up with the one thing it feeds', () => {
+        const edges: Array<[number, number]> = [[0, 1], [0, 2], [1, 3], [2, 3], [3, 4]];
+        const { centreY } = lay(edges, [0, 1, 2, 3, 4], { 3: 90 });
+        assert.strictEqual(centreY(3), centreY(4));
+    });
+
+    it('keeps the nodes a long wire passes clear of its path', () => {
+        const edges: Array<[number, number]> = [[0, 1], [1, 2], [2, 3], [0, 3]];
+        const { rect, centreY } = lay(edges, [0, 1, 2, 3]);
+        const wire = (centreY(0) + centreY(3)) / 2;
+        for (const node of [1, 2]) {
+            const r = rect(node);
+            assert.ok(wire < r.y || wire > r.y + r.h, `the wire runs through node ${node}`);
+        }
+    });
+
+    it('never overlaps two nodes', () => {
+        const edges: Array<[number, number]> = [
+            [0, 3], [1, 3], [2, 4], [3, 5], [4, 5], [0, 6], [6, 7], [5, 7], [1, 8], [8, 9], [2, 9], [7, 10], [9, 10], [0, 10],
+        ];
+        const nodes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        const heights = { 0: 80, 3: 150, 5: 30, 7: 200, 9: 60, 11: 90 };
+        const { rect } = lay(edges, nodes, heights);
+        for (let a = 0; a < nodes.length; a++) {
+            for (let b = a + 1; b < nodes.length; b++) {
+                assert.ok(!overlaps(rect(nodes[a]), rect(nodes[b])), `${nodes[a]} overlaps ${nodes[b]}`);
+            }
+        }
+    });
+
+    it('lays out a cycle without hanging', () => {
+        const { positions } = lay([[0, 1], [1, 2], [2, 0], [2, 3]], [0, 1, 2, 3]);
+        assert.strictEqual(positions.size, 4);
+    });
+});
+
+describe('findPieces', () => {
+    it('splits nodes into the groups wires join', () => {
+        const { upstream, downstream } = graph([[0, 1], [2, 1], [3, 4]], [0, 1, 2, 3, 4, 5]);
+        const pieces = findPieces([0, 1, 2, 3, 4, 5], upstream, downstream);
+        assert.deepStrictEqual(pieces, [[0, 1, 2], [3, 4], [5]]);
     });
 });

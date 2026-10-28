@@ -38,7 +38,7 @@ export class TextStyle {
 
     #color: string;
 
-    #font: string;
+    #font: string | undefined;
 
     #weight: FontWeight;
 
@@ -47,14 +47,14 @@ export class TextStyle {
     constructor(config: TextStyleConfig | undefined) {
         this.#size = config?.size === undefined ? DefaultSize : config.size;
         this.#color = config?.color === undefined ? DefaultColor : config.color;
-        this.#font = config?.font === undefined ? Theme.FontFamily : config.font;
+        this.#font = config?.font;
         this.#weight = config?.weight === undefined ? FontWeight.Normal : config.weight;
         this.#fontStyle = config?.style === undefined ? FontStyle.Normal : config.style;
     }
 
     setupStyle(ctx: CanvasRenderingContext2D, scale: number): void {
         ctx.fillStyle = this.#color;
-        ctx.font = this.#fontStyle + " " + this.#weight + " " + (this.#size * scale) + "px " + this.#font;
+        ctx.font = this.#fontStyle + " " + this.#weight + " " + (this.#size * scale) + "px " + this.getFont();
     }
 
     getSize(): number {
@@ -62,7 +62,7 @@ export class TextStyle {
     }
 
     getFont(): string {
-        return this.#font;
+        return this.#font ?? Theme.FontFamily;
     }
 
     getWeight(): FontWeight {

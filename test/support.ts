@@ -94,7 +94,7 @@ export interface StubElement {
     tagName: string;
     type: string;
     value: string;
-    style: { cssText: string };
+    style: { cssText: string, opacity?: string, pointerEvents?: string };
     children: Array<StubElement>;
     isConnected: boolean;
     clicked: number;
@@ -115,6 +115,19 @@ export interface StubElement {
     fire(name: string, event?: any): void;
 }
 
+function stubStyle(): StubElement['style'] {
+    const style: any = {};
+    let css = '';
+    Object.defineProperty(style, 'cssText', {
+        get: () => css,
+        set: (value: string) => {
+            css = value;
+            Object.keys(style).forEach((key) => delete style[key]);
+        },
+    });
+    return style;
+}
+
 export function withDocument(run: (body: StubElement, created: Array<StubElement>) => void): void {
     const created: Array<StubElement> = [];
     const element = (tagName: string): StubElement => {
@@ -123,7 +136,7 @@ export function withDocument(run: (body: StubElement, created: Array<StubElement
             tagName,
             type: '',
             value: '',
-            style: { cssText: '' },
+            style: stubStyle(),
             children: [],
             isConnected: false,
             clicked: 0,

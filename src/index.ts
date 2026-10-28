@@ -66,7 +66,7 @@ import { SliderWidget, SliderWidgetConfig } from './widgets/slider';
 import { ImageWidget, ImageWidgetConfig } from './widgets/image';
 import { RowWidget, RowWidgetConfig } from './widgets/row';
 import { drawField, drawFieldBox, drawFieldText, FieldLook, widgetFont } from './widgets/field';
-import { editInPlace, InPlaceEditConfig } from './widgets/inplace';
+import { editInPlace, InPlaceEdit, InPlaceEditConfig } from './widgets/inplace';
 export {
     WidgetBase, ValueWidget,
     NumberWidget, ColorWidget, StringWidget, TextWidget,
@@ -74,7 +74,7 @@ export {
     drawField, drawFieldBox, drawFieldText, widgetFont, editInPlace, formatNumber,
 };
 export type {
-    Widget, WidgetPointer, ValueWidgetConfig, FieldLook, InPlaceEditConfig,
+    Widget, WidgetPointer, ValueWidgetConfig, FieldLook, InPlaceEdit, InPlaceEditConfig,
     NumberWidgetConfig, ColorWidgetConfig, StringWidgetConfig, TextWidgetConfig,
     ButtonWidgetConfig, ToggleWidgetConfig, SliderWidgetConfig,
     ImageWidgetConfig, RowWidgetConfig,

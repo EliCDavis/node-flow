@@ -2,6 +2,7 @@ import { Box, InBox } from '../types/box';
 import { Vector2 } from '../types/vector2';
 import { CursorStyle } from '../styles/cursor';
 import { requestRender } from '../render_scheduler';
+import { editInPlace, InPlaceEdit } from './inplace';
 
 export const width = 150;
 export const height = 25;
@@ -50,6 +51,8 @@ export abstract class WidgetBase implements Widget {
 
     #scale = 1;
 
+    #editing: InPlaceEdit | null = null;
+
     abstract Size(): Vector2;
 
     protected abstract render(ctx: CanvasRenderingContext2D, box: Box, scale: number): void;
@@ -59,6 +62,14 @@ export abstract class WidgetBase implements Widget {
         this.#canvas = ctx.canvas ?? null;
         this.#scale = scale;
         this.#hovered = !this.#disabled && mousePosition !== undefined && InBox(box, mousePosition);
+
+        if (this.#editing !== null) {
+            if (this.#editing.input.isConnected) {
+                this.#editing.place(this.#box, scale);
+            } else {
+                this.#editing = null;
+            }
+        }
 
         ctx.save();
         if (this.#disabled) {
@@ -143,6 +154,16 @@ export abstract class WidgetBase implements Widget {
 
     protected scale(): number {
         return this.#scale;
+    }
+
+    protected editText(value: string, onCommit: (text: string) => void): void {
+        this.#editing = editInPlace({
+            canvas: this.#canvas,
+            box: this.#box,
+            scale: this.#scale,
+            value,
+            onCommit,
+        });
     }
 
     protected onPointerDown(pointer: WidgetPointer): void { }

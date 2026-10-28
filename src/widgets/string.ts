@@ -2,7 +2,6 @@ import { FlowNode } from "../node";
 import { CursorStyle } from "../styles/cursor";
 import { Box } from "../types/box";
 import { drawField } from "./field";
-import { editInPlace } from "./inplace";
 import { ValueWidget, ValueWidgetConfig } from "./value";
 
 export interface StringWidgetConfig extends ValueWidgetConfig<string> { }
@@ -28,12 +27,6 @@ export class StringWidget extends ValueWidget<string> {
 
     protected onClick(): void {
         const before = this.value();
-        editInPlace({
-            canvas: this.canvas(),
-            box: this.box(),
-            scale: this.scale(),
-            value: before,
-            onCommit: (text) => this.commit(text, before),
-        });
+        this.editText(before, (text) => this.commit(text, before));
     }
 }

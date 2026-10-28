@@ -11,7 +11,19 @@ import { ImageWidget } from '../src/widgets/image';
 import { ColorWidget } from '../src/widgets/color';
 import { RowWidget } from '../src/widgets/row';
 import { WidgetBase } from '../src/widgets/widget';
-import { CanvasRecord, center, stubCtx, widgetScene, withDocument } from './support';
+import { placeEditsDuring } from '../src/widgets/inplace';
+import { CanvasRecord, center, StubElement, stubCtx, widgetScene, withDocument } from './support';
+
+function cssOf(el: StubElement): Record<string, string> {
+    const style: Record<string, string> = {};
+    el.style.cssText.split(';').forEach((rule) => {
+        const at = rule.indexOf(':');
+        if (at > 0) {
+            style[rule.slice(0, at).trim()] = rule.slice(at + 1).trim();
+        }
+    });
+    return style;
+}
 
 describe('a number widget', () => {
     it('follows a drag and reports one edit when let go', () => {
@@ -94,6 +106,47 @@ describe('a number widget', () => {
 
             assert.deepEqual(commits, []);
             assert.equal((widget as NumberWidget).value(), 3);
+        });
+    });
+
+    it('keeps its input over the widget as the camera moves and zooms', () => {
+        withDocument((body) => {
+            const { graph, camera, ctx, widgetBox, click } = widgetScene((n) => new NumberWidget(n, { value: 3 }));
+            click(center(widgetBox()));
+            const input = body.children[0];
+
+            camera.position.x += 137;
+            camera.position.y -= 41;
+            camera.zoom = 2;
+            graph.render(ctx, camera, undefined);
+
+            const box = widgetBox();
+            const style = cssOf(input);
+            assert.equal(style.left, `${10 + box.Position.x}px`);
+            assert.equal(style.top, `${20 + box.Position.y}px`);
+            assert.equal(style.width, `${box.Size.x}px`);
+            assert.equal(style.height, `${box.Size.y}px`);
+        });
+    });
+
+    it('hides its input while the node is off the canvas', () => {
+        withDocument((body) => {
+            const { graph, camera, ctx, widgetBox, click } = widgetScene(
+                (n) => new NumberWidget(n, { value: 3 }),
+                { inputs: [{ name: 'in', type: 'n' }] },
+            );
+            click(center(widgetBox()));
+            const input = body.children[0];
+            const frame =() => placeEditsDuring(ctx.canvas, () => graph.render(ctx, camera, undefined));
+
+            camera.position.x -= 5000;
+            frame();
+            assert.equal(input.style.opacity, '0');
+
+            camera.position.x += 5000;
+            frame();
+            assert.equal(input.style.opacity, undefined);
+            assert.ok(input.isConnected);
         });
     });
 

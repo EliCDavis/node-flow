@@ -2,7 +2,6 @@ import { FlowNode } from "../node";
 import { CursorStyle } from "../styles/cursor";
 import { Box } from "../types/box";
 import { drawField } from "./field";
-import { editInPlace } from "./inplace";
 import { ValueWidget, ValueWidgetConfig } from "./value";
 import { WidgetPointer } from "./widget";
 
@@ -90,17 +89,11 @@ export class NumberWidget extends ValueWidget<number> {
             return;
         }
         const before = this.value();
-        editInPlace({
-            canvas: this.canvas(),
-            box: this.box(),
-            scale: this.scale(),
-            value: String(before),
-            onCommit: (text) => {
-                const parsed = Number.parseFloat(text);
-                if (Number.isFinite(parsed)) {
-                    this.commit(this.#clean(parsed), before);
-                }
-            },
+        this.editText(String(before), (text) => {
+            const parsed = Number.parseFloat(text);
+            if (Number.isFinite(parsed)) {
+                this.commit(this.#clean(parsed), before);
+            }
         });
     }
 

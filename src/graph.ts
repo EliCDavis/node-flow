@@ -19,6 +19,7 @@ export { CameraOrientation };
 import { PassSubsystem } from './pass/subsystem';
 import { QuickMenu } from './quickMenu';
 import { onRenderRequested, renderContinuously, requestRender } from './render_scheduler';
+import { placeEditsDuring } from './widgets/inplace';
 import { Minimap, MinimapConfig } from './minimap';
 
 export type GraphRenderer = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, position: Vector2, scale: number) => void;
@@ -761,10 +762,12 @@ export class NodeFlowGraph {
         TimeExecution("Render_Background", this.#renderBackground.bind(this));
 
         TimeExecution("Render_View_" + this.#currentView, () => {
-            let results = this.currentView().render(this.#ctx, this.#camera, this.#mousePosition);
-            if (results?.cursorStyle) {
-                this.#cursor = results?.cursorStyle;
-            }
+            placeEditsDuring(this.#canvas, () => {
+                let results = this.currentView().render(this.#ctx, this.#camera, this.#mousePosition);
+                if (results?.cursorStyle) {
+                    this.#cursor = results?.cursorStyle;
+                }
+            });
         });
 
         TimeExecution("Render_Minimap", () => {

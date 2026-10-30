@@ -345,9 +345,14 @@ export class Port {
     }
 
     /**
-     * A port asked to hide still shows while anything is connected to it.
+     * A port asked to hide still shows while anything is connected to it,
+     * and while its node is showing its hidden ports.
      */
     hidden(): boolean {
+        return this.tucked() && !(this.#node?.hiddenPortsShown() ?? false);
+    }
+
+    tucked(): boolean {
         return this.#hidden && this.#connections.length === 0;
     }
 

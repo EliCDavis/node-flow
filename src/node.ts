@@ -4,6 +4,7 @@ import { FontWeight, TextStyle, TextStyleConfig, TextStyleFallback } from "./sty
 import { Box, InBox } from "./types/box";
 import { CopyVector2, Distance, ScaleVector, Vector2, Zero } from "./types/vector2";
 import { Widget } from './widgets/widget';
+import { HiddenPortsToggle } from './widgets/hidden_ports';
 import { List } from './types/list';
 import { BoxStyle, BoxStyleConfig, BoxStyleWithFallback } from "./styles/box";
 import { Text } from "./types/text";
@@ -804,7 +805,8 @@ export class FlowNode {
             size.x = Math.max(size.x, tempMeasurement.x + doublePadding)
         }
 
-        for (const widget of this.#widgets) {
+        const widgets = this.#hasHiddenPortsToggle() ? [this.#hiddenPortsToggle, ...this.#widgets] : this.#widgets;
+        for (const widget of widgets) {
             if (widget.Hidden?.()) {
                 continue;
             }
@@ -835,6 +837,38 @@ export class FlowNode {
         const port = new Port(this, PortType.Output, config);
         this.#output.push(port);
         return port;
+    }
+
+    #hiddenPortsShown = false;
+
+    #hiddenPortsToggle = new HiddenPortsToggle(this);
+
+    #hiddenPortsTogglePosition: Box | null = null;
+
+    hiddenPortsShown(): boolean {
+        return this.#hiddenPortsShown;
+    }
+
+    setHiddenPortsShown(shown: boolean): void {
+        if (shown === this.#hiddenPortsShown) {
+            return;
+        }
+        this.#hiddenPortsShown = shown;
+        this.invalidateLayout();
+    }
+
+    hiddenPortCount(): number {
+        let count = 0;
+        for (const port of [...this.#input, ...this.#output]) {
+            if (port.tucked()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    #hasHiddenPortsToggle(): boolean {
+        return this.hiddenPortCount() > 0;
     }
 
     addWidget(widget: Widget): void {
@@ -928,6 +962,12 @@ export class FlowNode {
                 intersection.PortIsInput = false;
                 intersection.Port = this.#output[i];
             }
+        }
+
+        if (this.#hiddenPortsTogglePosition !== null && InBox(this.#hiddenPortsTogglePosition, position)) {
+            intersection.Node = this;
+            intersection.Widget = this.#hiddenPortsToggle;
+            intersection.WidgetBox = this.#hiddenPortsTogglePosition;
         }
 
         for (let i = 0; i < this.#widgetPositions.Count(); i++) {
@@ -1297,6 +1337,17 @@ export class FlowNode {
                 startY += portHeight + scaledElementSpacing;
             }
 
+            this.#hiddenPortsTogglePosition = null;
+            if (this.#hasHiddenPortsToggle()) {
+                const box: Box = {
+                    Position: { x: nodeBounds.Position.x + scaledPadding, y: startY },
+                    Size: { x: nodeBounds.Size.x - (scaledPadding * 2), y: this.#hiddenPortsToggle.Size().y * camera.zoom },
+                };
+                this.#hiddenPortsToggle.Draw(ctx, box, camera.zoom, mousePosition);
+                this.#hiddenPortsTogglePosition = box;
+                startY += box.Size.y + scaledElementSpacing;
+            }
+
             // Widgets
             for (let i = 0; i < this.#widgets.length; i++) {
                 const widget = this.#widgets[i];
@@ -1360,6 +1411,7 @@ export class FlowNode {
             return false;
         }
         this.#widgetPositions.Clear();
+        this.#hiddenPortsTogglePosition = null;
         return true;
     }
 

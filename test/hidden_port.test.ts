@@ -50,13 +50,14 @@ function scene(hidden: boolean) {
 
 describe('a hidden port', () => {
     it('takes no room on its node', () => {
-        const shown = scene(false);
-        const hidden = scene(true);
+        const one = scene(true);
+        const two = scene(true);
+        two.node.addInput({ name: 'Iridescence', type: 'iridescence', hidden: true });
 
-        const shownHeight = shown.node.calculateBounds(shown.ctx, shown.camera).Size.y;
-        const hiddenHeight = hidden.node.calculateBounds(hidden.ctx, hidden.camera).Size.y;
+        const oneHeight = one.node.calculateBounds(one.ctx, one.camera).Size.y;
+        const twoHeight = two.node.calculateBounds(two.ctx, two.camera).Size.y;
 
-        assert.ok(hiddenHeight < shownHeight);
+        assert.equal(twoHeight, oneHeight);
     });
 
     it('cannot be hovered where it would have been drawn', () => {

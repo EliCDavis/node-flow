@@ -250,8 +250,8 @@ export class NodeFlowGraph {
             this.#clickEnd.bind(this),
             this.#openContextMenu.bind(this),
             this.#fileDrop.bind(this),
-            (amount, anchor) => {
-                this.zoom(amount, anchor);
+            (factor, anchor) => {
+                this.#zoomBy(factor, anchor);
             }
         );
 
@@ -417,6 +417,10 @@ export class NodeFlowGraph {
 
 
     zoom(amount: number, anchor?: Vector2): void {
+        this.#zoomBy(1 + amount * 0.05, anchor);
+    }
+
+    #zoomBy(factor: number, anchor?: Vector2): void {
         const anchorPos = anchor ?? this.#mousePosition;
 
         let oldPos: Vector2 | undefined = undefined;
@@ -424,7 +428,7 @@ export class NodeFlowGraph {
             oldPos = this.#sceenPositionToGraphPosition(anchorPos);
         }
 
-        this.#camera.zoom += amount * this.#camera.zoom * 0.05;
+        this.#camera.zoom *= factor;
 
         if (!oldPos || anchorPos === undefined) {
             return;

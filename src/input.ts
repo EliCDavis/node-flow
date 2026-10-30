@@ -3,7 +3,7 @@ import { CopyVector2, Distance, SubVector2, Vector2, Zero } from "./types/vector
 
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_SLOP = 12;
-const PINCH_SENSITIVITY = 50;
+const WHEEL_ZOOM_PER_PIXEL = 0.0005;
 const SUPPRESS_MOUSE_MS = 600;
 
 export class MouseObserver {
@@ -18,7 +18,7 @@ export class MouseObserver {
     #clickStart: (position: Vector2, shiftOrCtrl: boolean) => void;
     #clickStop: () => void;
     #contextMenu: (position: Vector2) => void;
-    #zoomCallback: (amount: number, anchor: Vector2) => void;
+    #zoomCallback: (factor: number, anchor: Vector2) => void;
 
     #longPressTimer: ReturnType<typeof setTimeout> | null = null;
     #longPressOrigin: Vector2 = Zero();
@@ -34,7 +34,7 @@ export class MouseObserver {
         clickStop: () => void,
         contextMenu: (position: Vector2) => void,
         fileDrop: (file: File) => void,
-        zoomCallback: (amount: number, anchor: Vector2) => void,
+        zoomCallback: (factor: number, anchor: Vector2) => void,
     ) {
         this.#ele = ele;
         this.#dragCallback = dragCallback;
@@ -132,14 +132,12 @@ export class MouseObserver {
         } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
             dy *= this.#ele.clientHeight;
         }
-        // Scroll up zooms in (matches Figma / Maps).
-        const amount = -dy / 100;
-        if (amount === 0) {
+        if (dy === 0) {
             return;
         }
         const anchor = this.#mousePos(event);
         this.#moveCallback(anchor);
-        this.#zoomCallback(amount, anchor);
+        this.#zoomCallback(Math.exp(-dy * WHEEL_ZOOM_PER_PIXEL), anchor);
     }
 
     #move(event: MouseEvent): void {
@@ -226,7 +224,7 @@ export class MouseObserver {
             const anchor = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
             if (this.#pinchDist > 0) {
                 this.#moveCallback(anchor);
-                this.#zoomCallback((dist - this.#pinchDist) / PINCH_SENSITIVITY, anchor);
+                this.#zoomCallback(dist / this.#pinchDist, anchor);
             }
             this.#pinchDist = dist;
             return;

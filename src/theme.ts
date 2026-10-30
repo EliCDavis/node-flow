@@ -123,9 +123,9 @@ const defaults = {
 export type ThemeValues = typeof defaults;
 
 type DeepPartial<T> = {
-    [K in keyof T]?: T[K] extends object | null
-        ? (null extends T[K] ? T[K] : DeepPartial<T[K]>)
-        : T[K];
+    [K in keyof T]?: T[K] extends BevelColors | null
+        ? T[K]
+        : T[K] extends object ? DeepPartial<T[K]> : T[K];
 };
 
 export type ThemeConfig = DeepPartial<ThemeValues>;

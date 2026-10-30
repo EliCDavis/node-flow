@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "declaration": true, 
+        "outFile": "./dist/js/NodeFlow.js", 
+        "sourceMap": true, 
+        "strict": true, 
+        "module": "AMD", 
+        "target": "ESNext"
+    },
+
+    "include": [
+        "src/index.ts"
+    ], 
+
+    "exclude": [
+        "node_modules"
+    ] 
+}

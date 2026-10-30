@@ -1,0 +1,1134 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Node Flow Demo</title>
+    <link rel="shortcut icon" href="#" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --page: #07212a;
+            --font: "Source Code Pro", monospace;
+            --node-bg: #0c2b35;
+            --node-border: #1c1c1c;
+            --node-radius: 15px;
+            --node-bevel: none;
+            --title-bg: #154050;
+            --title-fg: #afb9bb;
+            --text: #afb9bb;
+            --dim: #7f9497;
+            --widget-bg: #0f313c;
+            --widget-fg: #afb9bb;
+            --widget-border: 2px solid #154050;
+            --widget-radius: 2px;
+            --widget-hover: #195366;
+            --widget-active: #1f637a;
+            --widget-bevel: none;
+            --widget-bevel-pressed: none;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--page);
+            font-family: var(--font);
+        }
+
+        #stage {
+            position: absolute;
+            inset: 0;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .node {
+            position: absolute;
+            left: 12px;
+            display: flex;
+            flex-direction: column;
+            max-width: calc(100% - 24px);
+            background: var(--node-bg);
+            border: 1px solid var(--node-border);
+            border-radius: var(--node-radius);
+            box-shadow: var(--node-bevel);
+            overflow: hidden;
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .node-title {
+            padding: 5px 15px 8px;
+            background: var(--title-bg);
+            color: var(--title-fg);
+            text-align: center;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .node-title small {
+            display: block;
+            font-size: 10px;
+        }
+
+        .node-body {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 15px;
+            min-height: 0;
+        }
+
+        .node.collapsed .node-body {
+            display: none;
+        }
+
+        .widget {
+            height: 25px;
+            padding: 0 10px;
+            font: inherit;
+            color: var(--widget-fg);
+            background: var(--widget-bg);
+            border: var(--widget-border);
+            border-radius: var(--widget-radius);
+            box-shadow: var(--widget-bevel);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .widget:hover {
+            background: var(--widget-hover);
+        }
+
+        .widget:active {
+            background: var(--widget-active);
+            box-shadow: var(--widget-bevel-pressed);
+        }
+
+        #toolbar {
+            top: 12px;
+            left: auto;
+            right: 12px;
+            width: 420px;
+        }
+
+        #toolbar .node-body {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        #log {
+            bottom: 12px;
+            width: 360px;
+            max-height: 34vh;
+        }
+
+        #log-list {
+            list-style: none;
+            overflow-y: auto;
+            min-height: 0;
+            flex: 1;
+        }
+
+        #log-list li {
+            line-height: 22px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #log-list li span {
+            color: var(--dim);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="stage"><canvas id="canvas"></canvas></div>
+
+    <div id="toolbar" class="node">
+        <div class="node-title"><small>NodeFlowGraph</small>Controls</div>
+        <div class="node-body">
+            <button class="widget" data-act="center" title="graph.centerOnGraph()">Center</button>
+            <button class="widget" data-act="reset" title="graph.resetCamera()">Reset</button>
+            <button class="widget" data-act="minimap" title="graph.minimap().setEnabled(...)">Minimap</button>
+            <button class="widget" data-act="zoom-in" title="graph.zoom(1)">Zoom in</button>
+            <button class="widget" data-act="zoom-out" title="graph.zoom(-1)">Zoom out</button>
+            <button class="widget" data-act="organize" title="graph.organize()">Organize</button>
+            <button class="widget" data-act="select-all" title="node.select()">Select all</button>
+            <button class="widget" data-act="delete" title="graph.removeSelectedNodes()">Delete</button>
+            <button class="widget" data-act="continuous" title="graph.renderContinuously()">Animate</button>
+            <button class="widget" data-act="theme" title="setTheme(...)" style="grid-column: 1 / -1">Theme: Windows 95</button>
+        </div>
+    </div>
+
+    <div id="log" class="node">
+        <div class="node-title"><small>Listeners</small>Events</div>
+        <div class="node-body">
+            <ol id="log-list"></ol>
+            <button class="widget" id="log-clear">Clear</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import {
+            Theme, FlowNode, FlowNote, NodeFlowGraph, Publisher,
+            MessageType, ContextMenuItemState, DefaultConnectionRenderer,
+            WidgetBase, ValueWidget, drawFieldBox, widgetFont,
+            NumberWidget, StringWidget, ToggleWidget, ButtonWidget, TextWidget, ImageWidget, RowWidget,
+            setTheme, onThemeChange,
+        } from "./dist/web/NodeFlow.js";
+
+        const win95Font = "Tahoma, 'Microsoft Sans Serif', 'MS Sans Serif', sans-serif";
+        const win95Bevel = { Light: "#ffffff", Dark: "#808080" };
+        const themes = {
+            "Default": {
+                FontFamily: "Source Code Pro",
+            },
+            "Windows 95": {
+                FontFamily: win95Font,
+                Graph: { BackgroundColor: "#008080", DotColor: "#006a6a" },
+                Node: {
+                    FontColor: "#000000",
+                    BackgroundColor: "#c0c0c0",
+                    Title: { Color: "#000080", FontColor: "#ffffff" },
+                    BorderRadius: 0,
+                    Border: { Idle: "#000000", MouseOver: "#000000", Grabbed: "#000000", Selected: "#ffffff" },
+                    Bevel: win95Bevel,
+                    Port: { FontColor: "#000000" },
+                    Message: { InfoColor: "#ffffff", WarnColor: "#ffff00", ErrorColor: "#ff4040" },
+                },
+                BoxSelect: { Color: "#ffffff", Radius: 0 },
+                Widget: {
+                    FontColor: "#000000",
+                    LabelColor: "#000000",
+                    FontSize: 13,
+                    BackgroundColor: "#c0c0c0",
+                    Border: { Color: "#000000", Size: 0, Radius: 0 },
+                    Bevel: win95Bevel,
+                    Hover: { BackgroundColor: "#c0c0c0" },
+                    Input: { BackgroundColor: "#ffffff", HoverBackgroundColor: "#ffffff", FontColor: "#000000" },
+                    Slider: { FillColor: "#a6caf0" },
+                    Button: { Click: { BackgroundColor: "#c0c0c0" } },
+                },
+                ContextMenu: {
+                    BackgroundColor: "#c0c0c0",
+                    HighlightColor: "#000080",
+                    HighlightFontColor: "#ffffff",
+                    FontColor: "#000000",
+                    DisabledFontColor: "#808080",
+                    BorderRadius: 0,
+                },
+                Minimap: {
+                    BackgroundColor: "#c0c0c0",
+                    BorderColor: "#000000",
+                    BorderRadius: 0,
+                    NodeColor: "#000080",
+                    ViewportColor: "rgba(0, 0, 0, 0.2)",
+                },
+                Popup: {
+                    BackgroundColor: "#c0c0c0",
+                    FontColor: "#000000",
+                    FontFamily: win95Font,
+                    BorderRadius: 0,
+                    Backdrop: "rgba(0, 0, 0, 0.25)",
+                },
+                Note: {
+                    FontColor: "#ffffff",
+                    CodeBlock: { BackgroundColor: "#000000", FontColor: "#c0c0c0", BorderRadius: 0 },
+                },
+            },
+        };
+
+        function bevelShadow(bevel, sunken) {
+            if (!bevel) {
+                return "none";
+            }
+            const [topLeft, bottomRight] = sunken ? [bevel.Dark, bevel.Light] : [bevel.Light, bevel.Dark];
+            return `inset 2px 2px 0 ${topLeft}, inset -2px -2px 0 ${bottomRight}`;
+        }
+
+        function syncPageToTheme() {
+            const css = document.documentElement.style;
+            const set = (name, value) => css.setProperty(name, value);
+            set("--page", Theme.Graph.BackgroundColor);
+            set("--font", Theme.FontFamily);
+            set("--node-bg", Theme.Node.BackgroundColor);
+            set("--node-border", Theme.Node.Border.Idle);
+            set("--node-radius", `${Theme.Node.BorderRadius}px`);
+            set("--node-bevel", bevelShadow(Theme.Node.Bevel, false));
+            set("--title-bg", Theme.Node.Title.Color);
+            set("--title-fg", Theme.Node.Title.FontColor);
+            set("--text", Theme.Node.Port.FontColor);
+            set("--dim", Theme.Widget.LabelColor);
+            set("--widget-bg", Theme.Widget.BackgroundColor);
+            set("--widget-fg", Theme.Widget.FontColor);
+            set("--widget-border", Theme.Widget.Border.Size > 0 ? `${Theme.Widget.Border.Size}px solid ${Theme.Widget.Border.Color}` : "0");
+            set("--widget-radius", `${Theme.Widget.Border.Radius}px`);
+            set("--widget-hover", Theme.Widget.Hover.BackgroundColor);
+            set("--widget-active", Theme.Widget.Button.Click.BackgroundColor);
+            set("--widget-bevel", bevelShadow(Theme.Widget.Bevel, false));
+            set("--widget-bevel-pressed", bevelShadow(Theme.Widget.Bevel, true));
+        }
+
+        onThemeChange(syncPageToTheme);
+        setTheme(themes["Default"]);
+
+        const logList = document.getElementById("log-list");
+        let logging = false;
+        function log(what, detail = "") {
+            if (!logging) {
+                return;
+            }
+            const li = document.createElement("li");
+            const detailSpan = document.createElement("span");
+            detailSpan.textContent = detail;
+            li.append(what + " ", detailSpan);
+            logList.prepend(li);
+            while (logList.children.length > 80) {
+                logList.lastChild.remove();
+            }
+        }
+        document.getElementById("log-clear").onclick = () => logList.replaceChildren();
+        document.querySelectorAll(".node-title").forEach((title) => {
+            title.onclick = () => title.parentElement.classList.toggle("collapsed");
+        });
+
+        const fmt = (v) => typeof v === "number" ? String(parseFloat(v.toPrecision(5))) : JSON.stringify(v);
+
+        class StarRatingWidget extends ValueWidget {
+            #mouse = undefined;
+
+            constructor(node, config) {
+                super(node, config, 0);
+            }
+
+            Size() {
+                return { x: 150, y: 25 };
+            }
+
+            Draw(ctx, box, scale, mouse) {
+                this.#mouse = mouse;
+                super.Draw(ctx, box, scale, mouse);
+            }
+
+            #starAt(x) {
+                const box = this.box();
+                return Math.min(5, Math.max(1, Math.ceil(((x - box.Position.x) / box.Size.x) * 5)));
+            }
+
+            render(ctx, box, scale) {
+                drawFieldBox(ctx, box, scale, { hovered: this.hovered(), value: "" });
+                const showing = this.hovered() && this.#mouse ? this.#starAt(this.#mouse.x) : this.value();
+                ctx.font = widgetFont(scale * 1.3);
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                for (let i = 0; i < 5; i++) {
+                    ctx.fillStyle = i < showing ? "#ffc95c" : "#2b4a55";
+                    ctx.fillText("★", box.Position.x + (box.Size.x * (i + 0.5) / 5), box.Position.y + box.Size.y / 2);
+                }
+            }
+
+            onClick(pointer) {
+                this.commit(this.#starAt(pointer.position.x), this.value());
+            }
+        }
+
+        class MorePortsWidget extends WidgetBase {
+            #ports;
+            #open = false;
+
+            constructor(ports) {
+                super();
+                this.#ports = ports;
+            }
+
+            Size() {
+                return { x: 150, y: 16 };
+            }
+
+            render(ctx, box, scale) {
+                const waiting = this.#ports.filter((p) => p.connections().length === 0).length;
+                const label = this.#open ? "▴ less" : `▾ ${waiting} more`;
+                const y = box.Position.y + box.Size.y / 2;
+                const cx = box.Position.x + box.Size.x / 2;
+                ctx.font = widgetFont(scale * 0.8);
+                const half = ctx.measureText(label).width / 2 + 6 * scale;
+                ctx.globalAlpha = this.hovered() ? 1 : 0.55;
+                ctx.strokeStyle = ctx.fillStyle = Theme.Widget.FontColor;
+                ctx.lineWidth = Math.max(1, scale);
+                ctx.beginPath();
+                ctx.moveTo(box.Position.x, y);
+                ctx.lineTo(cx - half, y);
+                ctx.moveTo(cx + half, y);
+                ctx.lineTo(box.Position.x + box.Size.x, y);
+                ctx.stroke();
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(label, cx, y);
+            }
+
+            onClick() {
+                this.#open = !this.#open;
+                this.#ports.forEach((p) => p.setHidden(!this.#open));
+            }
+        }
+
+        const mathPublisher = new Publisher({
+            name: "Math",
+            description: "Nodes the live example evaluates",
+            version: "v1.0.0",
+            nodes: {
+                "Number": {
+                    title: "Number",
+                    metadata: { op: "number" },
+                    outputs: [{ name: "value", type: "float32" }],
+                    widgets: [{ type: "number", config: { property: "value", value: 1, label: "Value" } }],
+                },
+                "Slider": {
+                    title: "Slider",
+                    metadata: { op: "number" },
+                    outputs: [{ name: "value", type: "float32" }],
+                    widgets: [{ type: "slider", config: { property: "value", min: 0, max: 10, value: 5, label: "0 – 10" } }],
+                },
+                "Add": {
+                    title: "Add",
+                    info: "Adds up everything wired into **numbers**.",
+                    metadata: { op: "add" },
+                    inputs: [{ name: "numbers", type: "float32", array: true, description: "Any number of values" }],
+                    outputs: [{ name: "sum", type: "float32" }],
+                },
+                "Multiply": {
+                    title: "Multiply",
+                    metadata: { op: "multiply" },
+                    inputs: [{ name: "a", type: "float32" }, { name: "b", type: "float32" }],
+                    outputs: [{ name: "product", type: "float32" }],
+                },
+                "Display": {
+                    title: "Display",
+                    metadata: { op: "display" },
+                    inputs: [{ name: "value", type: "float32" }],
+                    widgets: [{ type: "text", config: { property: "text", value: "—", textBoxStyle: { size: 28, color: "#ffc95c" } } }],
+                },
+            },
+        });
+
+        const examplePublisher = new Publisher({
+            name: "Examples",
+            description: "One node for each kind of widget",
+            version: "v1.0.0",
+            nodes: {
+                "Empty": { title: "Empty Node", canEditTitle: true, canEditPorts: true, canEditInfo: true },
+                "widgets/Number": { title: "Number", widgets: [{ type: "number", config: { label: "Value" } }] },
+                "widgets/Slider": { title: "Slider", widgets: [{ type: "slider", config: { value: 0.5 } }] },
+                "widgets/String": { title: "String", widgets: [{ type: "string", config: { label: "Text", value: "hello" } }] },
+                "widgets/Color": { title: "Color", widgets: [{ type: "color", config: { value: "#3fa7d6" } }] },
+                "widgets/Toggle": { title: "Toggle", widgets: [{ type: "toggle", config: { label: "On" } }] },
+                "widgets/Vector": {
+                    title: "Vector",
+                    outputs: [{ name: "out", type: "vector3" }],
+                    widgets: [{
+                        type: "row", config: {
+                            widgets: ["X", "Y", "Z"].map((axis) => ({ type: "number", config: { property: axis.toLowerCase(), label: axis, width: 72 } })),
+                        },
+                    }],
+                },
+            },
+        });
+
+        const baseWire = DefaultConnectionRenderer(2, undefined, 4, undefined);
+
+        const graph = new NodeFlowGraph(document.getElementById("canvas"), {
+            minimap: { enabled: true },
+            idleConnection: {
+                renderer: (params) => {
+                    const text = params.outPort?.getDataType() === "string" || params.inPort?.getDataType() === "string";
+                    if (text) {
+                        params.ctx.setLineDash([6 * params.graphScale, 5 * params.graphScale]);
+                    }
+                    baseWire(params);
+                    params.ctx.setLineDash([]);
+                },
+            },
+            contextMenu: {
+                items: [
+                    { name: "Center on graph", callback: () => graph.centerOnGraph() },
+                    { name: "Organize", callback: () => graph.organize() },
+                ],
+                subMenus: [{
+                    name: "Demo",
+                    items: [
+                        { name: "Log hello", callback: () => log("Context menu", "Demo › Log hello") },
+                        { name: "A disabled item", enabled: () => ContextMenuItemState.Disabled },
+                    ],
+                }],
+            },
+            nodes: {
+                onNodeCreated: (publisher, nodeType) => log("Node created", `${publisher} › ${nodeType}`),
+            },
+            board: {
+                onNoteAdded: () => log("Note added"),
+                onNoteRemoved: () => log("Note removed"),
+                onNoteDragStop: () => log("Note moved"),
+            },
+        });
+
+        graph.addPublisher("math", mathPublisher);
+        graph.addPublisher("examples", examplePublisher);
+
+        function evaluate(node, visiting = new Set()) {
+            const op = node.metadata()?.op;
+            if (op === undefined || visiting.has(node)) {
+                return NaN;
+            }
+            visiting.add(node);
+            const wired = (index) => node.inputPort(index).connections()
+                .map((c) => c.outNode())
+                .filter((n) => n !== null)
+                .map((n) => evaluate(n, new Set(visiting)));
+
+            switch (op) {
+                case "number": return Number(node.getProperty("value") ?? 0);
+                case "add": return wired(0).reduce((sum, v) => sum + v, 0);
+                case "multiply": return (wired(0)[0] ?? NaN) * (wired(1)[0] ?? NaN);
+                case "display": return wired(0)[0] ?? NaN;
+            }
+            return NaN;
+        }
+
+        let refreshQueued = false;
+        function refresh() {
+            if (refreshQueued) {
+                return;
+            }
+            refreshQueued = true;
+            queueMicrotask(() => {
+                refreshQueued = false;
+                for (const node of graph.getNodes()) {
+                    if (node.metadata()?.op !== "display") {
+                        continue;
+                    }
+                    const v = evaluate(node);
+                    node.setProperty("text", Number.isFinite(v) ? fmt(v) : "—");
+                }
+            });
+        }
+
+        graph.addOnNodeAddedListener((node) => {
+            if (node.metadata()?.op === undefined) {
+                return;
+            }
+            node.addAnyPropertyChangeListener((name) => {
+                if (name !== "text") {
+                    refresh();
+                }
+            });
+            for (let i = 0; i < node.inputs(); i++) {
+                node.inputPort(i).addConnectionAddedListener(refresh);
+                node.inputPort(i).addConnectionRemovedListener(refresh);
+            }
+            refresh();
+        });
+        graph.addOnNodeRemovedListener((node) => {
+            log("Node removed", node.title());
+            refresh();
+        });
+
+        const recipes = new WeakMap();
+        graph.addOnNodeCreatedListener((publisher, nodeType, node) => recipes.set(node, { publisher, nodeType }));
+        const publishers = { math: mathPublisher, examples: examplePublisher };
+
+        let clipboard = null;
+        graph.addCopyListener((nodes, connections) => {
+            const copyable = nodes.filter((n) => recipes.has(n));
+            clipboard = {
+                nodes: copyable.map((n) => ({ ...recipes.get(n), position: { ...n.getPosition() }, value: n.getProperty("value") })),
+                connections: connections.filter((c) => recipes.has(nodes[c.fromNode]) && recipes.has(nodes[c.toNode]))
+                    .map((c) => ({ ...c, fromNode: copyable.indexOf(nodes[c.fromNode]), toNode: copyable.indexOf(nodes[c.toNode]) })),
+            };
+            log("Copied", `${copyable.length} of ${nodes.length} selected (menu-made nodes copy)`);
+        });
+        graph.addPasteListener((at) => {
+            if (!clipboard || clipboard.nodes.length === 0) {
+                return;
+            }
+            const origin = clipboard.nodes[0].position;
+            graph.unselectAllNodes();
+            const made = clipboard.nodes.map((n) => {
+                const node = publishers[n.publisher].create(n.nodeType);
+                recipes.set(node, { publisher: n.publisher, nodeType: n.nodeType });
+                node.setPosition({ x: at.x + n.position.x - origin.x, y: at.y + n.position.y - origin.y });
+                if (n.value !== undefined) {
+                    node.setProperty("value", n.value);
+                }
+                graph.addNode(node);
+                node.select();
+                return node;
+            });
+            for (const c of clipboard.connections) {
+                graph.connectNodes(made[c.fromNode], c.fromPort, made[c.toNode], c.toPort);
+            }
+            log("Pasted", `${made.length} nodes`);
+        });
+
+        const COL = 1100;
+        const ROW = 1250;
+        const at = (col, row, dx = 0, dy = 0) => ({ x: col * COL + dx, y: row * ROW + dy });
+
+        function note(position, text, width = 480, locked = true) {
+            graph.addNote(new FlowNote({ position, text, width, locked }));
+        }
+
+        function add(config) {
+            const node = new FlowNode(config);
+            graph.addNode(node);
+            return node;
+        }
+
+        function fromPublisher(publisher, type, position, value) {
+            const node = publishers[publisher].create(type);
+            recipes.set(node, { publisher, nodeType: type });
+            node.setPosition(position);
+            if (value !== undefined) {
+                node.setProperty("value", value);
+            }
+            graph.addNode(node);
+            return node;
+        }
+
+        function logEdits(node, ...properties) {
+            for (const p of properties) {
+                node.addPropertyEditListener(p, (v) => log(`${node.title()} edited`, `${p} = ${fmt(v)}`));
+            }
+        }
+
+        note(at(0, 0), `
+# Node Flow
+
+Node Flow is a library for building node based tools, in the spirit of Unreal Blueprints and Blender's node editors. Everything on this canvas is live, so try it out.
+
+Each area of the canvas shows one part of the library, with a note explaining it and the code to do it.
+
+\`\`\`
+const graph = new NodeFlowGraph(canvas);
+graph.addNode(new FlowNode({ title: "Hello" }));
+\`\`\`
+`, 520);
+
+        note(at(0, 0, 0, 470), `
+## Getting around
+
+* **Drag** empty canvas to pan, **scroll** to zoom
+* **Drag** a node by its body; **Ctrl+drag** on empty canvas to box select
+* **Right-click** for menus: on the canvas, a node, or a note
+* **Space** opens a searchable new node menu at the cursor
+* **Drag a wire** from a port and let go on empty canvas to get a menu of nodes that fit
+* **Delete** removes selected nodes
+* **Ctrl+C**, **Ctrl+V**, **Ctrl+D** copy, paste and duplicate
+* **Drop a file** on a node that accepts files
+
+**Controls** (top right) calls the graph's methods, and **Events** (bottom left) logs what the graph reports. Click either title to fold it away.
+`, 520);
+
+        note(at(1, 0), `
+# Ports and types
+
+Each port has a type, and a wire only joins ports whose types match. Hover a port to see its type and description. Try wiring **Text** into **Add**: it is refused.
+
+A port can also accept **any** type, or a **list** of types.
+
+\`\`\`
+inputs: [
+  { name: "a", type: "float32",
+    description: "First number" },
+  { name: "value", type: "T", anyType: true },
+  { name: "x", type: "float32",
+    acceptedTypes: ["float32", "int"] },
+]
+\`\`\`
+
+Wires carrying \`string\` are dashed here by a custom connection renderer.
+`);
+
+        const numberA = add({
+            title: "Number", position: at(1, 0, 0, 560),
+            outputs: [{ name: "value", type: "float32", description: "A number" }],
+            widgets: [{ type: "number", config: { value: 4, label: "Value" } }],
+        });
+        const text = add({
+            title: "Text", position: at(1, 0, 0, 720),
+            outputs: [{ name: "text", type: "string" }],
+            widgets: [{ type: "string", config: { value: "hello" } }],
+        });
+        const intSource = add({
+            title: "Whole number", position: at(1, 0, 0, 880),
+            outputs: [{ name: "value", type: "int" }],
+            widgets: [{ type: "number", config: { value: 3, integer: true, label: "Value" } }],
+        });
+        const addTyped = add({
+            title: "Add", subTitle: "Typed ports", position: at(1, 0, 330, 560),
+            info: "Takes two **float32** numbers.",
+            inputs: [
+                { name: "a", type: "float32", description: "First number" },
+                { name: "b", type: "float32", description: "Second number" },
+            ],
+            outputs: [{ name: "sum", type: "float32", description: "a + b" }],
+        });
+        const anyNode = add({
+            title: "Print", subTitle: "Any type", position: at(1, 0, 330, 720),
+            inputs: [{ name: "value", type: "T", anyType: true, description: "Takes anything" }],
+        });
+        add({
+            title: "Round", subTitle: "Accepts a list of types", position: at(1, 0, 330, 860),
+            inputs: [{ name: "x", type: "float32", acceptedTypes: ["float32", "int"], description: "float32 or int" }],
+            outputs: [{ name: "rounded", type: "int" }],
+        });
+        add({
+            title: "Editable ports", position: at(1, 0, 660, 560),
+            info: "Right-click this node to add or remove ports.",
+            canEditPorts: true, canEditTitle: true, canEditInfo: true,
+            inputs: [{ name: "in", type: "float32" }],
+            outputs: [{ name: "out", type: "float32" }],
+        });
+        graph.connectNodes(numberA, 0, addTyped, 0);
+        graph.connectNodes(text, 0, anyNode, 0);
+
+        note(at(2, 0), `
+# Inputs that take many wires
+
+An **array** input takes any number of wires. It grows a slot per wire, in order.
+
+* Press a **slot** to pick up just that wire
+* Drop a wire **between slots** to put it there; a white bar marks the spot
+* Pick up a wire and drop it in another gap to **reorder**
+
+\`\`\`
+inputs: [
+  { name: "numbers", type: "float32",
+    array: true },
+]
+\`\`\`
+`);
+        const one = add({ title: "One", position: at(2, 0, 0, 470), outputs: [{ name: "value", type: "float32" }] });
+        const two = add({ title: "Two", position: at(2, 0, 0, 590), outputs: [{ name: "value", type: "float32" }] });
+        const three = add({ title: "Three", position: at(2, 0, 0, 710), outputs: [{ name: "value", type: "float32" }] });
+        add({ title: "Four", subTitle: "Not wired yet", position: at(2, 0, 0, 830), outputs: [{ name: "value", type: "float32" }] });
+        const many = add({
+            title: "Sum", subTitle: "Array input", position: at(2, 0, 380, 560),
+            inputs: [{ name: "numbers", type: "float32", array: true, description: "Wire in as many as you like" }],
+            outputs: [{ name: "sum", type: "float32" }],
+        });
+        graph.connectNodes(one, 0, many, 0);
+        graph.connectNodes(two, 0, many, 0);
+        graph.connectNodes(three, 0, many, 0);
+
+        note(at(3, 0), `
+# Hidden ports
+
+A port can start **hidden**, to keep busy nodes small. A hidden port still shows while something is wired to it, so no wire ever points at nothing.
+
+The "more" line is a custom widget that shows and hides them.
+
+\`\`\`
+inputs: [
+  { name: "Sheen", type: "sheen",
+    hidden: true },
+]
+port.setHidden(false);
+\`\`\`
+`);
+        const sheen = add({ title: "Sheen", position: at(3, 0, 0, 560), outputs: [{ name: "sheen", type: "sheen" }] });
+        const material = add({
+            title: "Material", subTitle: "Hidden ports", position: at(3, 0, 330, 520),
+            inputs: [
+                { name: "Color", type: "color" },
+                { name: "Roughness", type: "float32" },
+                { name: "Metallic", type: "float32" },
+                { name: "Alpha", type: "float32", hidden: true },
+                { name: "Clearcoat", type: "clearcoat", hidden: true },
+                { name: "Sheen", type: "sheen", hidden: true },
+                { name: "Specular", type: "specular", hidden: true },
+                { name: "Unlit", type: "bool", hidden: true },
+            ],
+            outputs: [{ name: "material", type: "material" }],
+        });
+        const hiddenPorts = [];
+        for (let i = 0; i < material.inputs(); i++) {
+            if (["Alpha", "Clearcoat", "Sheen", "Specular", "Unlit"].includes(material.inputPort(i).getDisplayName())) {
+                hiddenPorts.push(material.inputPort(i));
+            }
+        }
+        material.insertWidget(0, new MorePortsWidget(hiddenPorts));
+        graph.connectNodes(sheen, 0, material, 5);
+
+        note(at(0, 1), `
+# Widgets
+
+Widgets sit under a node's ports and fill its width.
+
+* **Numbers**: drag sideways to change, or click to type. Enter keeps it, Escape cancels
+* **Sliders** drag, and keep following the pointer until you let go
+* **Text** and **colours** open in place
+* A **row** puts widgets side by side
+
+Each value widget can be bound to a node **property**. Setting the property from code updates the widget quietly; a person's finished edit fires **edit listeners**. Watch the event log as you edit.
+
+\`\`\`
+widgets: [
+  { type: "number", config: {
+      property: "radius", label: "Radius",
+      step: 0.05, min: 0 } },
+  { type: "row", config: { widgets: [
+      { type: "number", config:
+        { property: "x", label: "X", width: 72 } },
+      ...
+  ] } },
+]
+
+node.addPropertyEditListener("radius",
+  (v) => save(v));
+\`\`\`
+`, 560);
+
+        const numbers = add({
+            title: "Numbers", position: at(0, 1, 640, 0),
+            widgets: [
+                { type: "number", config: { property: "radius", label: "Radius", value: 1.25, min: 0 } },
+                { type: "number", config: { property: "count", label: "Count", value: 3, integer: true, min: 0, max: 10 } },
+                { type: "number", config: { property: "fine", label: "Fine", value: 0.5, step: 0.001 } },
+            ],
+        });
+        logEdits(numbers, "radius", "count", "fine");
+
+        const sliders = add({
+            title: "Sliders", position: at(0, 1, 640, 230),
+            widgets: [
+                { type: "slider", config: { property: "amount", label: "Amount", value: 0.4 } },
+                { type: "slider", config: { property: "snapped", label: "Snapped", min: 0, max: 5, value: 2.5, snapIncrement: 0.25 } },
+            ],
+        });
+        logEdits(sliders, "amount", "snapped");
+
+        const vector = add({
+            title: "Vector", subTitle: "Row of labelled numbers", position: at(0, 1, 640, 420),
+            outputs: [{ name: "position", type: "vector3" }],
+            widgets: [{
+                type: "row", config: {
+                    widgets: ["X", "Y", "Z"].map((axis, i) => ({
+                        type: "number", config: { property: axis.toLowerCase(), label: axis, width: 72, value: [1, 2.5, -3][i] },
+                    })),
+                },
+            }],
+        });
+        logEdits(vector, "x", "y", "z");
+
+        const strings = add({
+            title: "Text and colour", position: at(0, 1, 1020, 0),
+            widgets: [
+                { type: "string", config: { property: "name", label: "Name", value: "Node Flow" } },
+                { type: "color", config: { property: "tint", label: "Tint", value: "#e0605080" } },
+                { type: "color", config: { property: "paper", value: "#f2e8cf" } },
+            ],
+        });
+        logEdits(strings, "name", "tint", "paper");
+
+        const toggles = add({ title: "Toggle, disable and hide", position: at(0, 1, 1020, 300) });
+        const gatedNumber = new NumberWidget(toggles, { label: "Gated", value: 7 });
+        const gatedText = new StringWidget(toggles, { label: "Also gated", value: "edit me" });
+        const detailRow = new RowWidget([
+            new NumberWidget(toggles, { label: "W", width: 72, value: 2 }),
+            new NumberWidget(toggles, { label: "H", width: 72, value: 1 }),
+        ]);
+        toggles.addWidget(new ToggleWidget(toggles, {
+            label: "Editable", value: true,
+            callback: (on) => {
+                gatedNumber.setDisabled(!on);
+                gatedText.setDisabled(!on);
+                log("Toggle", `Editable = ${on}`);
+            },
+        }));
+        toggles.addWidget(gatedNumber);
+        toggles.addWidget(gatedText);
+        toggles.addWidget(new ToggleWidget(toggles, {
+            label: "Show size", value: false, onColor: "#ffc95c", offColor: "#4a3a10",
+            callback: (on) => detailRow.setHidden(!on),
+        }));
+        detailRow.setHidden(true);
+        toggles.addWidget(detailRow);
+
+        const buttons = add({ title: "Button and text", position: at(0, 1, 1020, 600) });
+        let clicks = 0;
+        const counter = new ButtonWidget({
+            text: "Click me",
+            callback: () => {
+                clicks++;
+                counter.setText(`Clicked ${clicks} time${clicks === 1 ? "" : "s"}`);
+                log("Button", `clicked ${clicks}`);
+            },
+        });
+        buttons.addWidget(counter);
+        buttons.addWidget(new TextWidget(buttons, { property: "caption", value: "Drag the number:" }));
+        buttons.addWidget(new NumberWidget(buttons, {
+            label: "Live", value: 10,
+            onInput: (v) => buttons.setProperty("caption", `Dragging… ${fmt(v)}`),
+            callback: (v) => buttons.setProperty("caption", `Kept ${fmt(v)}`),
+        }));
+
+        add({
+            title: "Image", position: at(0, 1, 1400, 0),
+            widgets: [{ type: "image", config: { image: "https://i.imgur.com/qRZgWC0.jpeg", maxWidth: 220, maxHeight: 220 } }],
+        });
+
+        note(at(2, 1), `
+# Custom widgets
+
+Extend **WidgetBase** for anything interactive, or **ValueWidget** for something that holds a value. The base class tracks hover, press, disabled and hidden for you, and passes on pointer events. Once pressed, a widget keeps getting them until the pointer is let go, even off the node.
+
+\`\`\`
+class Stars extends ValueWidget {
+  Size() { return { x: 150, y: 25 }; }
+  render(ctx, box, scale) { ... }
+  onClick(pointer) {
+    this.commit(starAt(pointer.position.x),
+                this.value());
+  }
+}
+node.addWidget(new Stars(node,
+  { property: "rating" }));
+\`\`\`
+
+Use \`drawField\`, \`drawFieldBox\` and \`widgetFont\` to match the built-in look.
+`);
+        const rating = add({ title: "Review", subTitle: "Custom widget", position: at(2, 1, 0, 660) });
+        rating.addWidget(new StarRatingWidget(rating, { property: "rating", value: 3 }));
+        rating.addWidget(new TextWidget(rating, { property: "ratingText", value: "3 of 5" }));
+        rating.addPropertyChangeListener("rating", (_, v) => rating.setProperty("ratingText", `${v} of 5`));
+        logEdits(rating, "rating");
+
+        note(at(3, 1), `
+# Node options
+
+* **Messages** hang under a node; some only show on hover
+* **Styles** recolour a node's title and body
+* A **locked** node cannot be dragged
+* **Editable** nodes let people retitle them and edit their info
+* A node can add its own **right-click menu**, with groups, submenus, and items that are disabled or hidden
+* **onFileDrop** receives files dropped on the node
+* Callbacks report **select**, **grab**, **release** and **drag stop**
+
+\`\`\`
+new FlowNode({
+  locked: true,
+  messages: [{ message: "Hi",
+    type: MessageType.Warning,
+    alwaysShow: true }],
+  style: { title: { color: "#6b2d5c" } },
+  onFileDrop: (file) => ...,
+});
+\`\`\`
+`, 500);
+        add({
+            title: "Messages", position: at(3, 1, 0, 620),
+            messages: [
+                { message: "Always shown", alwaysShow: true },
+                { message: "Only on hover" },
+                { message: "A warning", type: MessageType.Warning, alwaysShow: true },
+                { message: "An error", type: MessageType.Error, alwaysShow: true },
+            ],
+        });
+        add({
+            title: "Styled", subTitle: "Custom colours", position: at(3, 1, 330, 620),
+            style: {
+                title: { color: "#6b2d5c" },
+                idle: { color: "#2a1630" },
+                mouseOver: { color: "#3a1f42" },
+                grabbed: { color: "#4a2853" },
+                selected: { color: "#4a2853" },
+            },
+            outputs: [{ name: "out", type: "float32" }],
+        });
+        add({ title: "Locked", subTitle: "Can't be dragged", position: at(3, 1, 330, 760), locked: true });
+        add({
+            title: "Rename me", position: at(3, 1, 660, 620), canEditTitle: true, canEditInfo: true,
+            info: "Right-click › **Edit** to change my title or this text.",
+            onTitleChange: (_, before, after) => log("Title changed", `${before} → ${after}`),
+        });
+        add({
+            title: "Custom menu", subTitle: "Right-click me", position: at(3, 1, 660, 760),
+            contextMenu: {
+                items: [
+                    { name: "Say hello", callback: () => log("Menu", "hello from a node") },
+                    { name: "Disabled item", enabled: () => ContextMenuItemState.Disabled },
+                    { name: "Hidden item", enabled: () => ContextMenuItemState.Hidden },
+                    { name: "Grouped A", group: "group", callback: () => log("Menu", "grouped A") },
+                    { name: "Grouped B", group: "group", callback: () => log("Menu", "grouped B") },
+                ],
+                subMenus: [{ name: "More", items: [{ name: "Nested", callback: () => log("Menu", "nested item") }] }],
+            },
+        });
+        const dropTarget = add({
+            title: "Drop a file here", subTitle: "onFileDrop", position: at(3, 1, 0, 900),
+            onSelect: () => log("Selected", "Drop a file here"),
+            onUnselect: () => log("Unselected", "Drop a file here"),
+            onDragStop: () => log("Drag stopped", "Drop a file here"),
+            onFileDrop: (file) => {
+                log("File dropped", `${file.name} (${file.size} bytes)`);
+                dropTarget.clearWidgets();
+                if (file.type.startsWith("image/")) {
+                    dropTarget.addWidget(new ImageWidget({ blob: file, maxWidth: 200, maxHeight: 200 }));
+                } else {
+                    dropTarget.addWidget(new TextWidget(dropTarget, { value: file.name }));
+                }
+            },
+        });
+
+        note(at(0, 2), `
+# A live graph
+
+Node Flow draws and edits the graph; your app decides what it means. These **Math** nodes come from a **Publisher**, and this page recalculates them whenever a value or a wire changes.
+
+Drag the numbers, rewire them, or add more from **right-click › New Node › Math**.
+
+\`\`\`
+const math = new Publisher({ name: "Math",
+  nodes: { "Add": { title: "Add", ... } } });
+graph.addPublisher("math", math);
+
+node.addAnyPropertyChangeListener(recalc);
+port.addConnectionAddedListener(recalc);
+\`\`\`
+`, 520);
+        const n1 = fromPublisher("math", "Number", at(0, 2, 600, 0), 2);
+        const n2 = fromPublisher("math", "Slider", at(0, 2, 600, 180), 5);
+        const n3 = fromPublisher("math", "Number", at(0, 2, 600, 360), 3);
+        const sum = fromPublisher("math", "Add", at(0, 2, 940, 60));
+        const product = fromPublisher("math", "Multiply", at(0, 2, 1220, 200));
+        const display = fromPublisher("math", "Display", at(0, 2, 1500, 200));
+        graph.connectNodes(n1, 0, sum, 0);
+        graph.connectNodes(n2, 0, sum, 0);
+        graph.connectNodes(sum, 0, product, 0);
+        graph.connectNodes(n3, 0, product, 1);
+        graph.connectNodes(product, 0, display, 0);
+
+        note(at(2, 2), `
+# Notes
+
+Notes are **markdown**, drawn on the canvas.
+
+* Headers, **bold**, *italic*
+* Lists
+* Code blocks
+
+\`\`\`
+graph.addNote(new FlowNote({
+  text: "# Hello", position, width: 400,
+}));
+\`\`\`
+
+Every note on this page is **locked**. The one beside this is not: drag it, pull its edges to resize it, or right-click it to edit.
+`);
+        graph.addNote(new FlowNote({
+            position: at(2, 2, 540, 0),
+            width: 360,
+            locked: false,
+            text: `
+## Edit me
+
+Right-click › **Edit Note**, then click away to save.
+
+Drag the left or right edge to change the width.
+`,
+            onContentChange: (_, text) => log("Note edited", text.trim().split("\n")[0]),
+            onWidthChange: (_, w) => log("Note resized", `${Math.round(w)} wide`),
+        }));
+
+        note(at(3, 2), `
+# Graph options
+
+\`\`\`
+new NodeFlowGraph(canvas, {
+  backgroundColor: "#07212a",
+  minimap: { enabled: true },
+  idleConnection: { renderer: (p) => ... },
+  contextMenu: { items: [...] },
+  nodes: {
+    publishers: { ... },
+    onNodeCreated: (pub, type, node) => ...,
+  },
+  board: { notes: [...], onNoteAdded },
+});
+
+setTheme({ FontFamily: "Tahoma",
+  Node: { BackgroundColor: "#c0c0c0" } });
+\`\`\`
+
+**setTheme** lays your values over the default theme, and everything already on screen redraws in it. Try **Theme: Windows 95** in Controls.
+
+Right-click empty canvas to see this page's own menu items next to the built-in ones. The toolbar calls \`centerOnGraph\`, \`resetCamera\`, \`zoom\`, \`organize\`, \`minimap().setEnabled\` and \`renderContinuously\`.
+
+\`organize\` lays every node out again, so it will rearrange this tour.
+`, 520);
+
+        let stopContinuous = null;
+        let themeName = "Default";
+        const actions = {
+            "theme": (button) => {
+                const next = themeName === "Default" ? "Windows 95" : "Default";
+                button.textContent = `Theme: ${themeName}`;
+                themeName = next;
+                setTheme(themes[next]);
+                log("Theme", next);
+            },
+            "center": () => graph.centerOnGraph(),
+            "reset": () => graph.resetCamera(),
+            "zoom-in": () => graph.zoom(1),
+            "zoom-out": () => graph.zoom(-1),
+            "minimap": () => graph.minimap().setEnabled(!graph.minimap().enabled()),
+            "organize": () => graph.organize(),
+            "select-all": () => graph.getNodes().forEach((n) => n.select()),
+            "delete": () => log("Deleted", `${graph.removeSelectedNodes().length} nodes`),
+            "continuous": (button) => {
+                if (stopContinuous) {
+                    stopContinuous();
+                    stopContinuous = null;
+                    button.textContent = "Animate";
+                } else {
+                    stopContinuous = graph.renderContinuously();
+                    button.textContent = "Stop";
+                }
+            },
+        };
+        document.getElementById("toolbar").addEventListener("click", (e) => {
+            const button = e.target.closest("button");
+            if (button) {
+                actions[button.dataset.act]?.(button);
+                graph.requestRender();
+            }
+        });
+
+        graph.setCamera({ position: { x: 40, y: 90 }, zoom: 0.55 });
+        window.graph = graph;
+        logging = true;
+        log("Ready", "try dragging a number; `graph` is on window");
+    </script>
+</body>
+
+</html>

@@ -243,6 +243,8 @@ export class FlowNode {
 
     #widgetPositions: List<Box>;
 
+    #portWidgetPositions: List<Box> = new List<Box>();
+
     #data: Metadata;
 
     #registeredAnyPropertyChangeCallbacks: Array<AnyPropertyChangeCallback>;
@@ -802,7 +804,7 @@ export class FlowNode {
             }
             this.#portTextStyle.measure(ctx, 1, port.getDisplayName(), tempMeasurement);
             size.y += this.#portRowHeight(port, tempMeasurement.y) + this.#elementSpacing;
-            size.x = Math.max(size.x, tempMeasurement.x + doublePadding)
+            size.x = Math.max(size.x, this.#portRowWidth(port, tempMeasurement.x) + doublePadding)
         }
 
         const widgets = this.#hasHiddenPortsToggle() ? [this.#hiddenPortsToggle, ...this.#widgets] : this.#widgets;
@@ -829,6 +831,9 @@ export class FlowNode {
 
     addInput(config: PortConfig): Port {
         const port = new Port(this, config.array ? PortType.InputArray : PortType.Input, config);
+        if (config.widget !== undefined) {
+            port.setWidget(GlobalWidgetFactory.createFromConfig(this, config.widget));
+        }
         this.#input.push(port);
         return port;
     }
@@ -980,6 +985,18 @@ export class FlowNode {
             }
         }
 
+        for (let i = 0; i < this.#portWidgetPositions.Count(); i++) {
+            const port = this.#input[i];
+            if (port !== undefined && port.widgetShown() && InBox(this.#portWidgetPositions.At(i), position)) {
+                intersection.Node = this;
+                intersection.Widget = port.widget() as Widget;
+                intersection.WidgetBox = this.#portWidgetPositions.At(i);
+                intersection.Port = undefined;
+                intersection.PortIndex = undefined;
+                intersection.PortIsInput = undefined;
+            }
+        }
+
         return intersection;
     }
 
@@ -1125,7 +1142,15 @@ export class FlowNode {
 
     #portRowHeight(port: Port, textHeight: number): number {
         const slots = port.slots();
-        return slots > 1 ? Math.max(textHeight, slots * ARRAY_SLOT_PITCH) : textHeight;
+        const widget = port.widgetShown() ? (port.widget() as Widget).Size().y : 0;
+        return Math.max(slots > 1 ? slots * ARRAY_SLOT_PITCH : 0, textHeight, widget);
+    }
+
+    #portRowWidth(port: Port, textWidth: number): number {
+        if (!port.widgetShown()) {
+            return textWidth;
+        }
+        return textWidth + this.#elementSpacing + (port.widget() as Widget).Size().x;
     }
 
     public hasBeenLaidOut(): boolean {
@@ -1153,6 +1178,7 @@ export class FlowNode {
             this.#inputPortPositions.Clear();
             this.#outputPortPositions.Clear();
             this.#widgetPositions.Clear();
+            this.#portWidgetPositions.Clear();
             const scaledPadding = this.#padding * camera.zoom;
             const scaledElementSpacing = this.#elementSpacing * camera.zoom;
 
@@ -1293,6 +1319,7 @@ export class FlowNode {
                 const port = this.#input[i];
                 if (port.hidden()) {
                     this.#inputPortPositions.Push({ Position: { x: nodeBounds.Position.x, y: startY }, Size: { x: 0, y: 0 } });
+                    this.#portWidgetPositions.Push({ Position: { x: nodeBounds.Position.x, y: startY }, Size: { x: 0, y: 0 } });
                     continue;
                 }
                 this.#portTextStyle.measure(ctx, 1, port.getDisplayName(), tempMeasurement);
@@ -1305,6 +1332,21 @@ export class FlowNode {
                 // Text
                 this.#portTextStyle.setupStyle(ctx, camera.zoom);
                 ctx.fillText(port.getDisplayName(), leftSide, position.y);
+
+                // Widget
+                if (port.widgetShown()) {
+                    const widget = port.widget() as Widget;
+                    const widgetHeight = widget.Size().y * camera.zoom;
+                    const widgetLeft = leftSide + (tempMeasurement.x * camera.zoom) + scaledElementSpacing;
+                    const box: Box = {
+                        Position: { x: widgetLeft, y: startY + ((portHeight - widgetHeight) / 2) },
+                        Size: { x: nodeBounds.Position.x + nodeBounds.Size.x - scaledPadding - widgetLeft, y: widgetHeight },
+                    };
+                    widget.Draw(ctx, box, camera.zoom, mousePosition);
+                    this.#portWidgetPositions.Push(box);
+                } else {
+                    this.#portWidgetPositions.Push({ Position: { x: nodeBounds.Position.x, y: startY }, Size: { x: 0, y: 0 } });
+                }
 
                 // Port
                 this.#inputPortPositions.Push(port.render(ctx, position, camera, mousePosition, postProcess));
@@ -1411,6 +1453,7 @@ export class FlowNode {
             return false;
         }
         this.#widgetPositions.Clear();
+        this.#portWidgetPositions.Clear();
         this.#hiddenPortsTogglePosition = null;
         return true;
     }

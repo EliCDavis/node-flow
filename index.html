@@ -192,7 +192,7 @@
         import {
             Theme, FlowNode, FlowNote, NodeFlowGraph, Publisher,
             MessageType, ContextMenuItemState, DefaultConnectionRenderer,
-            WidgetBase, ValueWidget, drawFieldBox, widgetFont,
+            ValueWidget, drawFieldBox, widgetFont,
             NumberWidget, StringWidget, ToggleWidget, ButtonWidget, TextWidget, ImageWidget, RowWidget,
             setTheme, onThemeChange,
         } from "./dist/web/NodeFlow.js";
@@ -349,46 +349,6 @@
 
             onClick(pointer) {
                 this.commit(this.#starAt(pointer.position.x), this.value());
-            }
-        }
-
-        class MorePortsWidget extends WidgetBase {
-            #ports;
-            #open = false;
-
-            constructor(ports) {
-                super();
-                this.#ports = ports;
-            }
-
-            Size() {
-                return { x: 150, y: 16 };
-            }
-
-            render(ctx, box, scale) {
-                const waiting = this.#ports.filter((p) => p.connections().length === 0).length;
-                const label = this.#open ? "▴ less" : `▾ ${waiting} more`;
-                const y = box.Position.y + box.Size.y / 2;
-                const cx = box.Position.x + box.Size.x / 2;
-                ctx.font = widgetFont(scale * 0.8);
-                const half = ctx.measureText(label).width / 2 + 6 * scale;
-                ctx.globalAlpha = this.hovered() ? 1 : 0.55;
-                ctx.strokeStyle = ctx.fillStyle = Theme.Widget.FontColor;
-                ctx.lineWidth = Math.max(1, scale);
-                ctx.beginPath();
-                ctx.moveTo(box.Position.x, y);
-                ctx.lineTo(cx - half, y);
-                ctx.moveTo(cx + half, y);
-                ctx.lineTo(box.Position.x + box.Size.x, y);
-                ctx.stroke();
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText(label, cx, y);
-            }
-
-            onClick() {
-                this.#open = !this.#open;
-                this.#ports.forEach((p) => p.setHidden(!this.#open));
             }
         }
 
@@ -745,7 +705,7 @@ inputs: [
 
 A port can start **hidden**, to keep busy nodes small. A hidden port still shows while something is wired to it, so no wire ever points at nothing.
 
-The "more" line is a custom widget that shows and hides them.
+A node with hidden ports gets a **more** line under them. Click it to show or hide them all.
 
 \`\`\`
 inputs: [
@@ -770,14 +730,51 @@ port.setHidden(false);
             ],
             outputs: [{ name: "material", type: "material" }],
         });
-        const hiddenPorts = [];
-        for (let i = 0; i < material.inputs(); i++) {
-            if (["Alpha", "Clearcoat", "Sheen", "Specular", "Unlit"].includes(material.inputPort(i).getDisplayName())) {
-                hiddenPorts.push(material.inputPort(i));
-            }
-        }
-        material.insertWidget(0, new MorePortsWidget(hiddenPorts));
         graph.connectNodes(sheen, 0, material, 5);
+
+        note(at(4, 0), `
+# Widgets on ports
+
+An input can hold its own value in a **widget** on its row. The widget stands in for a wire, so it steps aside while something is connected and comes back when the wire is removed.
+
+Try wiring **Size** into **Radius**.
+
+\`\`\`
+inputs: [
+  { name: "Radius", type: "float32",
+    widget: { type: "number", config:
+      { property: "radius", value: 1 } } },
+]
+\`\`\`
+
+The value lives in the node's **property**, so edit listeners and \`setProperty\` work as they do for any widget.
+`);
+        const size = add({
+            title: "Size", position: at(4, 0, 0, 600),
+            outputs: [{ name: "value", type: "float32" }],
+            widgets: [{ type: "number", config: { value: 2.5, label: "Value" } }],
+        });
+        const circle = add({
+            title: "Circle", subTitle: "Widgets on ports", position: at(4, 0, 330, 540),
+            inputs: [
+                { name: "Radius", type: "float32", widget: { type: "number", config: { property: "radius", value: 1, width: 90 } } },
+                { name: "Segments", type: "int", widget: { type: "number", config: { property: "segments", value: 32, integer: true, min: 3, width: 90 } } },
+                {
+                    name: "Center", type: "vector2", widget: {
+                        type: "row", config: {
+                            widgets: ["X", "Y"].map((axis) => ({ type: "number", config: { property: axis.toLowerCase(), label: axis, value: 0, width: 64 } })),
+                        },
+                    },
+                },
+                { name: "Fill", type: "color", widget: { type: "color", config: { property: "fill", value: "#3fa7d6", width: 90 } } },
+                { name: "Filled", type: "bool", widget: { type: "toggle", config: { property: "filled", value: true, label: "", width: 60 } } },
+                { name: "Name", type: "string", widget: { type: "string", config: { property: "name", value: "circle", width: 120 } } },
+            ],
+            outputs: [{ name: "shape", type: "shape" }],
+        });
+        logEdits(circle, "radius", "segments", "x", "y", "fill", "filled", "name");
+        circle.inputPort(0).addConnectionAddedListener(() => log("Circle", "Radius wired, its widget steps aside"));
+        circle.inputPort(0).addConnectionRemovedListener(() => log("Circle", "Radius unwired, its widget is back"));
 
         note(at(0, 1), `
 # Widgets

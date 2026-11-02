@@ -11,6 +11,8 @@ import { Box, InBox } from "./types/box";
 import { Text } from "./types/text";
 import { Vector2 } from "./types/vector2";
 import { Color, HSV, HSV2RGB, RgbToHex } from './utils/color';
+import type { Widget } from "./widgets/widget";
+import type { WidgetConfig } from "./widgets/factory";
 
 export enum PortType {
     Input = "INPUT",
@@ -55,6 +57,12 @@ export interface PortConfig {
      * Leaves the port off the node until something is connected to it.
      */
     hidden?: boolean;
+
+    /**
+     * A widget drawn on the port's own row while nothing is connected to
+     * it, for a value the port holds on its own. Input ports only.
+     */
+    widget?: WidgetConfig;
 
     emptyStyle?: PortStyle;
     filledStyle?: PortStyle;
@@ -166,6 +174,8 @@ export class Port {
     #onConnectionAdded: Array<ConnectionChangeCallback>;
 
     #onConnectionRemoved: Array<ConnectionChangeCallback>;
+
+    #widget: Widget | null = null;
 
     constructor(node: FlowNode, portType: PortType, config?: PortConfig) {
         this.#node = node;
@@ -339,9 +349,29 @@ export class Port {
     }
 
     #visibilityMayHaveChanged(was: boolean): void {
-        if (was !== this.hidden() || this.#portType === PortType.InputArray) {
+        if (was !== this.hidden() || this.#portType === PortType.InputArray || this.#widget !== null) {
             this.#node?.invalidateLayout();
         }
+    }
+
+    setWidget(widget: Widget | null): void {
+        this.#widget = widget;
+        this.#node?.invalidateLayout();
+    }
+
+    widget(): Widget | null {
+        return this.#widget;
+    }
+
+    /**
+     * The widget stands in for a wire, so it leaves once one is connected.
+     */
+    widgetShown(): boolean {
+        return this.#widget !== null
+            && this.#portType !== PortType.Output
+            && this.#connections.length === 0
+            && !this.hidden()
+            && !(this.#widget.Hidden?.() ?? false);
     }
 
     /**

@@ -261,11 +261,11 @@ export class ContextMenu {
 
     #bounds: Box | null = null;
 
-    #contains(point: Vector2): boolean {
+    public contains(point: Vector2): boolean {
         if (this.#bounds !== null && InBox(this.#bounds, point)) {
             return true;
         }
-        return this.#openSubMenu !== undefined && this.#openSubMenu.#contains(point);
+        return this.#openSubMenu !== undefined && this.#openSubMenu.contains(point);
     }
 
     /**
@@ -315,7 +315,7 @@ export class ContextMenu {
             Size: { x: scaledEntryWidth, y: totalScaledHeight },
         };
 
-        const pointer = mousePosition !== undefined && this.#openSubMenu !== undefined && this.#openSubMenu.#contains(mousePosition)
+        const pointer = mousePosition !== undefined && this.#openSubMenu !== undefined && this.#openSubMenu.contains(mousePosition)
             ? undefined
             : mousePosition;
 

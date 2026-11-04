@@ -3,6 +3,7 @@ import { BuildMarkdown } from '../src/markdown/markdown';
 import { BasicMarkdownEntry, CodeBlockEntry, UnorderedListMarkdownEntry } from '../src/markdown/entry';
 import { FontStyle, FontWeight } from '../src/styles/text';
 import { Text } from '../src/types/text';
+import { setTheme } from '../src/theme';
 
 /** The runs of text in an entry, as [content, weight, style] triples. */
 function runs(entry: any): Array<[string, FontWeight, FontStyle]> {
@@ -139,6 +140,16 @@ describe('markdown: code', () => {
         assert.deepStrictEqual(runs(entry).map(r => r[0]), ['a ', 'b', ' c']);
         assert.strictEqual(entry.lines()[1].style().getFont(), 'monospace');
         assert.notStrictEqual(entry.lines()[0].style().getFont(), 'monospace');
+    });
+
+    it('sets inline code in the theme code font', () => {
+        setTheme({ Note: { CodeFontFamily: 'VT323' } });
+        try {
+            const entry = BuildMarkdown('a `b` c')[0] as any;
+            assert.strictEqual(entry.lines()[1].style().getFont(), 'VT323');
+        } finally {
+            setTheme();
+        }
     });
 
     it('keeps a lone backtick as text', () => {

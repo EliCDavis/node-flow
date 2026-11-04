@@ -237,6 +237,8 @@ export class FlowNode {
 
     #selected: boolean;
 
+    #highlighted = false;
+
     #inputPortPositions: List<Box>;
 
     #outputPortPositions: List<Box>;
@@ -366,6 +368,18 @@ export class FlowNode {
         for (let i = 0; i < this.#onSelect.length; i++) {
             this.#onSelect[i]();
         }
+    }
+
+    public highlighted(): boolean {
+        return this.#highlighted;
+    }
+
+    public setHighlighted(highlighted: boolean): void {
+        if (this.#highlighted === highlighted) {
+            return;
+        }
+        this.#highlighted = highlighted;
+        requestRender();
     }
 
     public raiseDragStoppedEvent() {
@@ -1187,6 +1201,21 @@ export class FlowNode {
             // Background
             const nodeStyle = this.#calculateStyle(state);
             nodeStyle.Draw(ctx, nodeBounds, camera.zoom);
+
+            if (this.#highlighted) {
+                const gap = 3;
+                ctx.save();
+                ctx.strokeStyle = Theme.Node.Border.Highlighted;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.roundRect(
+                    nodeBounds.Position.x - gap, nodeBounds.Position.y - gap,
+                    nodeBounds.Size.x + gap * 2, nodeBounds.Size.y + gap * 2,
+                    nodeStyle.radius() * camera.zoom + gap
+                );
+                ctx.stroke();
+                ctx.restore();
+            }
 
             // Title
             const borderSize = nodeStyle.borderSize();

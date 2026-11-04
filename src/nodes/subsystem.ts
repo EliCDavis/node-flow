@@ -6,7 +6,7 @@ import { FlowNode, NodeState } from "../node";
 import { Organize } from "../organize";
 import { PassSubsystem } from "../pass/subsystem";
 import { TimeExecution } from "../performance";
-import { arrayInsertIndex, Port, PortType, portsCompatible } from "../port";
+import { arrayInsertIndex, Cast, Port, PortType, portsConnect } from "../port";
 import { requestRender } from "../render_scheduler";
 import { BoxStyle } from "../styles/box";
 import { CursorStyle } from "../styles/cursor";
@@ -21,6 +21,7 @@ import { Publisher } from "./publisher";
 
 export type NodeAddedCallback = (node: FlowNode) => void;
 export type NodeRemovedCallback = (node: FlowNode) => void;
+export type NodeHoverCallback = (node: FlowNode | null) => void;
 
 export const nodeFlowGroup = "node-flow-graph-node-menu";
 
@@ -84,6 +85,7 @@ interface PortIntersection {
 interface NodeSubsystemConfig {
     idleConnection?: ConnectionRendererConfiguration
     nodes?: NodeFactoryConfig
+    casts?: Array<Cast>
 }
 
 export class NodeSubsystem {
@@ -126,6 +128,7 @@ export class NodeSubsystem {
 
     #boxSelectionNodes: List<number>;
 
+    #casts: Array<Cast>;
 
     #lastCtx: CanvasRenderingContext2D | null;
 
@@ -136,6 +139,10 @@ export class NodeSubsystem {
     #nodeRemovedCallbacks: Array<NodeRemovedCallback>;
 
     #registeredNodeAddedCallbacks: Array<NodeAddedCallback>;
+
+    #nodeHoverCallbacks = new Array<NodeHoverCallback>();
+
+    #hoveredNode: FlowNode | null = null;
 
     // ========================================================================
 
@@ -160,6 +167,15 @@ export class NodeSubsystem {
         this.#boxSelectEnd_graphSpace = Zero();
         this.#boxSelectionNodes = new List<number>();
         this.#lastCtx = null;
+        this.#casts = config?.casts ?? [];
+    }
+
+    public setCasts(casts: Array<Cast>): void {
+        this.#casts = casts;
+    }
+
+    public casts(): Array<Cast> {
+        return this.#casts;
     }
 
     public addPublisher(identifier: string, publisher: Publisher): void {
@@ -186,6 +202,20 @@ export class NodeSubsystem {
             return;
         }
         this.#nodeRemovedCallbacks.push(callback);
+    }
+
+    public addNodeHoverListener(callback: NodeHoverCallback): void {
+        this.#nodeHoverCallbacks.push(callback);
+    }
+
+    #setHoveredNode(node: FlowNode | null): void {
+        if (this.#hoveredNode === node) {
+            return;
+        }
+        this.#hoveredNode = node;
+        for (let i = 0; i < this.#nodeHoverCallbacks.length; i++) {
+            this.#nodeHoverCallbacks[i](node);
+        }
     }
 
     clickStart(mousePosition: Vector2, camera: Camera, ctrlKey: boolean): boolean {
@@ -445,7 +475,10 @@ export class NodeSubsystem {
         let firstHidden = -1;
         for (let i = 0; i < count; i++) {
             const port = side === PortType.Input ? node.inputPort(i) : node.outputPort(i);
-            if (!portsCompatible(port, against)) {
+            const compatible = side === PortType.Input
+                ? portsConnect(against, port, this.#casts)
+                : portsConnect(port, against, this.#casts);
+            if (!compatible) {
                 continue;
             }
             if (!port.hidden()) {
@@ -521,13 +554,13 @@ export class NodeSubsystem {
         }
 
         // Different types, can't connect
-        if (this.#portHovering.InputPort && !portsCompatible(this.#portHovering.Port, conn.outPort())) {
+        if (this.#portHovering.InputPort && !portsConnect(conn.outPort(), this.#portHovering.Port, this.#casts)) {
             this.#clearCurrentlySelectedConnection();
             return;
         }
 
         // Different types, can't connect
-        if (!this.#portHovering.InputPort && !portsCompatible(this.#portHovering.Port, conn.inPort())) {
+        if (!this.#portHovering.InputPort && !portsConnect(this.#portHovering.Port, conn.inPort(), this.#casts)) {
             this.#clearCurrentlySelectedConnection();
             return;
         }
@@ -559,7 +592,7 @@ export class NodeSubsystem {
     connectNodes(nodeOut: FlowNode, outPort: number, nodeIn: FlowNode, inPort: number): Connection | undefined {
         const from = nodeOut.outputPort(outPort);
         const to = nodeIn.inputPort(inPort);
-        if (!portsCompatible(from, to)) {
+        if (!portsConnect(from, to, this.#casts)) {
             console.error("can't connect nodes of different types", from.getDataType(), to.getDataType());
             return;
         }
@@ -955,6 +988,7 @@ export class NodeSubsystem {
         this.#widgetHovering = null;
         this.#nodeHovering = -1;
         this.#boxSelectionNodes.Clear();
+        let hovered: FlowNode | null = null;
 
         const selectedBox_Screenspace = this.#boxSelectionScreenspaceBox(camera);
 
@@ -976,6 +1010,9 @@ export class NodeSubsystem {
 
             if (mousePosition !== undefined && !this.#boxSelect) {
                 const intersection = this.#nodes[i].inBounds(ctx, camera, mousePosition);
+                if (intersection.Node !== undefined) {
+                    hovered = intersection.Node;
+                }
 
                 if (intersection.Node !== undefined && intersection.PortIndex === undefined && intersection.Widget === undefined) {
                     state = NodeState.MouseOver;
@@ -1019,6 +1056,7 @@ export class NodeSubsystem {
 
             this.#nodes[i].render(ctx, camera, state, mousePosition, this.#postProcessPass);
         }
+        this.#setHoveredNode(hovered);
 
         if (this.#widgetCurrentlyClicking !== null) {
             this.#cursor = this.#widgetCurrentlyClicking.Cursor?.() ?? CursorStyle.Pointer;

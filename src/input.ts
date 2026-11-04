@@ -19,6 +19,8 @@ export class MouseObserver {
     #clickStop: () => void;
     #contextMenu: (position: Vector2) => void;
     #zoomCallback: (factor: number, anchor: Vector2) => void;
+    #leaveCallback: (() => void) | undefined;
+    #inside = false;
 
     #longPressTimer: ReturnType<typeof setTimeout> | null = null;
     #longPressOrigin: Vector2 = Zero();
@@ -35,6 +37,7 @@ export class MouseObserver {
         contextMenu: (position: Vector2) => void,
         fileDrop: (file: File) => void,
         zoomCallback: (factor: number, anchor: Vector2) => void,
+        leaveCallback?: () => void,
     ) {
         this.#ele = ele;
         this.#dragCallback = dragCallback;
@@ -43,6 +46,7 @@ export class MouseObserver {
         this.#clickStop = clickStop;
         this.#contextMenu = contextMenu;
         this.#zoomCallback = zoomCallback;
+        this.#leaveCallback = leaveCallback;
 
         this.#clicked = false;
         this.#lastTouch = Zero();
@@ -64,6 +68,12 @@ export class MouseObserver {
         document.addEventListener("touchcancel", redraws(this.#touchEnd.bind(this)), false);
 
         ele.addEventListener("mousemove", redraws(this.#move.bind(this)), false);
+        ele.addEventListener("mouseleave", redraws(() => {
+            this.#inside = false;
+            if (!this.#clicked) {
+                this.#leaveCallback?.();
+            }
+        }), false);
         ele.addEventListener("touchmove", redraws(this.#touchMove.bind(this)), { passive: false });
 
         ele.addEventListener("wheel", redraws(this.#wheel.bind(this)), { passive: false });
@@ -144,6 +154,7 @@ export class MouseObserver {
         if (this.#fromTouch()) {
             return;
         }
+        this.#inside = true;
         const pos = this.#mousePos(event);
         if (this.#clicked) {
             const delta = Zero();
@@ -158,6 +169,7 @@ export class MouseObserver {
         if (event.button !== 0 || this.#fromTouch()) {
             return;
         }
+        this.#inside = true;
         this.#clicked = true;
         this.#clickStart(this.#mousePos(event), event.ctrlKey || event.shiftKey);
     }
@@ -166,8 +178,12 @@ export class MouseObserver {
         if (event.button !== 0 || this.#fromTouch()) {
             return;
         }
+        const wasClicked = this.#clicked;
         this.#clicked = false;
         this.#clickStop();
+        if (wasClicked && !this.#inside) {
+            this.#leaveCallback?.();
+        }
     }
 
     #touchStart(event: TouchEvent): void {

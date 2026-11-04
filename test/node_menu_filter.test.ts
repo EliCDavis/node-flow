@@ -117,3 +117,27 @@ describe('filtering the new node menu to what could finish a wire', () => {
         assert.ok(!groups.includes('Math'), `Math should be gone, got ${groups}`);
     });
 });
+
+describe('filtering the new node menu through casts', () => {
+    const graph = {} as any;
+    const at = { x: 0, y: 0 };
+    const casts = [{ from: 'int', to: 'float64' }];
+
+    it('dragging an int output offers nodes taking a float64', () => {
+        const names = itemNames(publisher().contextMenu(graph, at, {
+            needs: PortType.Input,
+            types: ['int'],
+            casts,
+        }));
+        assert.deepStrictEqual(names, ['Add', 'Negate', 'Select']);
+    });
+
+    it('dragging an int input does not offer float64 producers', () => {
+        const names = itemNames(publisher().contextMenu(graph, at, {
+            needs: PortType.Output,
+            types: ['int'],
+            casts,
+        }));
+        assert.deepStrictEqual(names, ['Select']);
+    });
+});

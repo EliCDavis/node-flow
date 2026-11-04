@@ -24,7 +24,8 @@ const defaults = {
             Idle: "#1c1c1c",
             MouseOver: "#8e8e8e",
             Grabbed: "white",
-            Selected: "#6e6e6e"
+            Selected: "#6e6e6e",
+            Highlighted: "#ffc95c"
         },
         Bevel: null as BevelColors | null,
         Port: {
@@ -111,6 +112,7 @@ const defaults = {
         H3: {
             FontSize: 16,
         },
+        CodeFontFamily: null as string | null,
         CodeBlock: {
             BackgroundColor: "#0c2b35",
             FontColor: "#afb9bb",

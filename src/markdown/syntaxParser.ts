@@ -150,7 +150,7 @@ export class MarkdownSyntaxParser {
             this.#inc();
         }
 
-        return [new Text(content, { font: "monospace" })];
+        return [new Text(content, { font: Theme.Note.CodeFontFamily ?? "monospace" })];
     }
 
     #text(): Array<Text> {
@@ -315,7 +315,7 @@ export class MarkdownSyntaxParser {
         this.#inc(); // puts us on the next token
 
         const codeBlockText = this.#originalText.substring(start as number, end).replace(/\r?\n$/, "");
-        const entryText = new Text(codeBlockText);
+        const entryText = new Text(codeBlockText, { font: Theme.Note.CodeFontFamily ?? undefined });
         this.#assignStandardStyling([entryText])
         entryText.setColor(Theme.Note.CodeBlock.FontColor);
         return new CodeBlockEntry(entryText)

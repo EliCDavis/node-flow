@@ -1,6 +1,10 @@
 import * as assert from 'assert';
-import { Port, PortConfig, PortType, portsCompatible } from '../src/port';
+import { Port, PortConfig, PortType, portsCompatible, portsConnect } from '../src/port';
 import { FlowNode } from '../src/node';
+import { DanglingConnection, NodeSubsystem } from '../src/nodes/subsystem';
+import { PassSubsystem } from '../src/pass/subsystem';
+import { Camera } from '../src/camera';
+import { center, stubCtx } from './support';
 
 function port(config: PortConfig): Port {
     // A port only reaches back to its node when it is drawn or connected,
@@ -121,5 +125,49 @@ describe('settling a port on a type', () => {
         settled.setAnyType(true);
 
         assert.ok(portsCompatible(settled, port({ type: 'float64' })));
+    });
+});
+
+describe('casts', () => {
+    const casts = [{ from: 'int', to: 'float64' }];
+
+    it('lets an output feed an input it casts to', () => {
+        assert.ok(portsConnect(port({ type: 'int' }), port({ type: 'float64' }), casts));
+    });
+
+    it('only goes the way it was registered', () => {
+        assert.ok(!portsConnect(port({ type: 'float64' }), port({ type: 'int' }), casts));
+    });
+
+    it('reaches any of the types an input takes', () => {
+        const lifted = port({ type: 'float64', acceptedTypes: ['float64', '[]float64'] });
+        assert.ok(portsConnect(port({ type: 'int' }), lifted, casts));
+    });
+
+    it('refuses mismatched types without one', () => {
+        assert.ok(!portsConnect(port({ type: 'int' }), port({ type: 'float64' })));
+    });
+
+    it('wires a node made from a released wire through a cast', () => {
+        const graph = new NodeSubsystem(new PassSubsystem(), { casts });
+        const source = new FlowNode({ title: 'source', position: { x: 0, y: 0 }, outputs: [{ name: 'Out', type: 'int' }] });
+        graph.addNode(source);
+        const camera = new Camera();
+        const ctx = stubCtx();
+        graph.render(ctx, camera, undefined);
+
+        let dangling: DanglingConnection | null = null;
+        graph.setConnectionReleasedHandler((d) => dangling = d);
+        const out = center(source.outputPortPosition(0));
+        graph.render(ctx, camera, out);
+        graph.clickStart(out, camera, false);
+        graph.render(ctx, camera, { x: 600, y: 500 });
+        graph.clickEnd();
+
+        const made = new FlowNode({ title: 'made', position: { x: 300, y: 0 }, inputs: [{ name: 'In', type: 'float64' }] });
+        graph.addNode(made);
+        dangling!.connectTo(made);
+
+        assert.equal(made.inputPort(0).connections().length, 1);
     });
 });

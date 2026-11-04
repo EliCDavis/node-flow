@@ -10,7 +10,7 @@ import { Clamp01 } from "./utils/math";
 import { GraphSubsystem, RenderResults } from './graphSubsystem';
 import { FlowNote } from "./notes/note";
 import { NoteAddedCallback, NoteDragStartCallback, NoteDragStopCallback, NoteRemovedCallback, NoteSubsystem, NoteSubsystemConfig } from "./notes/subsystem";
-import { ConnectionRendererConfiguration, DanglingConnection, InternalConnection, NodeAddedCallback, NodeRemovedCallback, NodeSubsystem } from "./nodes/subsystem";
+import { ConnectionRendererConfiguration, DanglingConnection, InternalConnection, NodeAddedCallback, NodeHoverCallback, NodeRemovedCallback, NodeSubsystem } from "./nodes/subsystem";
 import { Connection } from './connection';
 import { Publisher } from './nodes/publisher';
 import { VectorPool } from './types/pool';
@@ -21,6 +21,7 @@ import { QuickMenu } from './quickMenu';
 import { onRenderRequested, renderContinuously, requestRender } from './render_scheduler';
 import { placeEditsDuring } from './widgets/inplace';
 import { Minimap, MinimapConfig } from './minimap';
+import { Cast } from './port';
 
 export type GraphRenderer = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, position: Vector2, scale: number) => void;
 
@@ -65,6 +66,7 @@ export interface FlowNodeGraphConfiguration {
     idleConnection?: ConnectionRendererConfiguration
     contextMenu?: ContextMenuConfig
     nodes?: NodeFactoryConfig
+    casts?: Array<Cast>
     board?: NoteSubsystemConfig
     minimap?: MinimapConfig
 }
@@ -164,6 +166,8 @@ export class NodeFlowGraph {
 
     #mousePosition: Vector2 | undefined;
 
+    #mouseOverCanvas = false;
+
     #camera: Camera;
 
     #openedContextMenu: OpenContextMenu | null;
@@ -185,7 +189,8 @@ export class NodeFlowGraph {
 
         this.#mainNodeSubsystem = new NodeSubsystem(postProcessPass, {
             nodes: config?.nodes,
-            idleConnection: config?.idleConnection
+            idleConnection: config?.idleConnection,
+            casts: config?.casts,
         });
 
         this.#lastFrameCursor = CursorStyle.Default;
@@ -245,6 +250,7 @@ export class NodeFlowGraph {
             this.#mouseDragEvent.bind(this),
             (mousePosition) => {
                 this.#mousePosition = mousePosition;
+                this.#mouseOverCanvas = true;
             },
             this.#clickStart.bind(this),
             this.#clickEnd.bind(this),
@@ -252,6 +258,9 @@ export class NodeFlowGraph {
             this.#fileDrop.bind(this),
             (factor, anchor) => {
                 this.#zoomBy(factor, anchor);
+            },
+            () => {
+                this.#mouseOverCanvas = false;
             }
         );
 
@@ -455,6 +464,7 @@ export class NodeFlowGraph {
         this.#contextMenuEntryHovering = null;
 
         this.#mousePosition = mousePosition;
+        this.#mouseOverCanvas = true;
 
         if (this.#minimap.contains(mousePosition)) {
             this.#lookAtFromMinimap(mousePosition);
@@ -492,6 +502,10 @@ export class NodeFlowGraph {
 
     addPublisher(identifier: string, publisher: Publisher): void {
         this.#mainNodeSubsystem.addPublisher(identifier, publisher);
+    }
+
+    setCasts(casts: Array<Cast>): void {
+        this.#mainNodeSubsystem.setCasts(casts);
     }
 
     getNodes(): Array<FlowNode> {
@@ -643,6 +657,10 @@ export class NodeFlowGraph {
         this.#mainNodeSubsystem.addOnNodeRemovedListener(callback);
     }
 
+    public addNodeHoverListener(callback: NodeHoverCallback): void {
+        this.#mainNodeSubsystem.addNodeHoverListener(callback);
+    }
+
     #sceenPositionToGraphPosition(screenPosition: Vector2): Vector2 {
         const out = Zero();
         this.#camera.screenSpaceToGraphSpace(screenPosition, out);
@@ -674,6 +692,7 @@ export class NodeFlowGraph {
             {
                 needs: dangling.needs,
                 types: dangling.types,
+                casts: this.#mainNodeSubsystem.casts(),
                 onCreated: dangling.connectTo,
             },
         );
@@ -767,7 +786,7 @@ export class NodeFlowGraph {
 
         TimeExecution("Render_View_" + this.#currentView, () => {
             placeEditsDuring(this.#canvas, () => {
-                let results = this.currentView().render(this.#ctx, this.#camera, this.#mousePosition);
+                let results = this.currentView().render(this.#ctx, this.#camera, this.#pointerOnGraph());
                 if (results?.cursorStyle) {
                     this.#cursor = results?.cursorStyle;
                 }
@@ -790,6 +809,21 @@ export class NodeFlowGraph {
         this.#lastFrameCursor = this.#cursor;
     }
 
+    #pointer(): Vector2 | undefined {
+        return this.#mouseOverCanvas ? this.#mousePosition : undefined;
+    }
+
+    #pointerOnGraph(): Vector2 | undefined {
+        const pointer = this.#pointer();
+        if (pointer === undefined) {
+            return undefined;
+        }
+        if (this.#openedContextMenu?.Menu.contains(pointer) || this.#openQuickMenu?.Menu.contains(pointer)) {
+            return undefined;
+        }
+        return pointer;
+    }
+
     #renderBackground(): void {
         this.#backgroundRenderer(this.#canvas, this.#ctx, this.#camera.position, this.#camera.zoom);
     }
@@ -799,7 +833,7 @@ export class NodeFlowGraph {
             if (this.#openedContextMenu !== null) {
                 const pos = VectorPool.get();
                 this.#camera.graphSpaceToScreenSpace(this.#openedContextMenu.Position, pos)
-                this.#contextMenuEntryHovering = this.#openedContextMenu.Menu.render(this.#ctx, pos, this.#camera.zoom, this.#mousePosition, true);
+                this.#contextMenuEntryHovering = this.#openedContextMenu.Menu.render(this.#ctx, pos, this.#camera.zoom, this.#pointer(), true);
 
                 if (this.#contextMenuEntryHovering !== null) {
                     this.#cursor = CursorStyle.Pointer;
@@ -813,7 +847,7 @@ export class NodeFlowGraph {
             if (this.#openQuickMenu !== null) {
                 const pos = VectorPool.get();
                 this.#camera.graphSpaceToScreenSpace(this.#openQuickMenu.Position, pos)
-                this.#contextMenuEntryHovering = this.#openQuickMenu.Menu.render(this.#ctx, pos, this.#camera.zoom, this.#mousePosition);
+                this.#contextMenuEntryHovering = this.#openQuickMenu.Menu.render(this.#ctx, pos, this.#camera.zoom, this.#pointer());
 
                 if (this.#contextMenuEntryHovering !== null) {
                     this.#cursor = CursorStyle.Pointer;

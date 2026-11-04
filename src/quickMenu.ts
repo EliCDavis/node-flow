@@ -6,6 +6,7 @@ import { FontWeight } from "./styles/text";
 import { Theme } from "./theme";
 import { Text } from './types/text';
 import { ScaleVector, Vector2 } from './types/vector2';
+import { Box, InBox } from './types/box';
 import { Display } from './elements/base';
 
 class QuickMenuGroup {
@@ -325,6 +326,16 @@ export class QuickMenu {
         }
 
         this.#container.render(ctx, pos, 1, this.renderSize);
+        this.#bounds = {
+            Position: { x: pos.x, y: pos.y },
+            Size: { x: this.renderSize.x, y: this.renderSize.y },
+        };
         return null;
+    }
+
+    #bounds: Box | null = null;
+
+    public contains(point: Vector2): boolean {
+        return this.#bounds !== null && InBox(this.#bounds, point);
     }
 }

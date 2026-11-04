@@ -24,8 +24,8 @@ export {
 };
 
 // Ports
-import { Port, PortConfig, PortStyle, PortType, portsCompatible } from './port';
-export { Port, PortConfig, PortStyle, PortType, portsCompatible };
+import { Cast, Port, PortConfig, PortStyle, PortType, portsCompatible, portsConnect } from './port';
+export { Cast, Port, PortConfig, PortStyle, PortType, portsCompatible, portsConnect };
 
 // Rendering
 import { renderContinuously, requestRender } from './render_scheduler';
@@ -34,14 +34,14 @@ export { renderContinuously, requestRender };
 import { Minimap, MinimapConfig } from './minimap';
 export { Minimap, MinimapConfig };
 
-import { DanglingConnection, InternalConnection } from './nodes/subsystem';
-export { DanglingConnection, InternalConnection };
+import { DanglingConnection, InternalConnection, NodeHoverCallback } from './nodes/subsystem';
+export { DanglingConnection, InternalConnection, NodeHoverCallback };
 
 import { NodeMenuFilter } from './nodes/publisher';
 export { NodeMenuFilter };
 
-import { portConfigTypes, typeSetsCompatible } from './port';
-export { portConfigTypes, typeSetsCompatible };
+import { portConfigTypes, portTypeColor, typeSetsCompatible, typeSetsConnect } from './port';
+export { portConfigTypes, portTypeColor, typeSetsCompatible, typeSetsConnect };
 
 // Connections
 import {

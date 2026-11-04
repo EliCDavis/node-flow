@@ -1,6 +1,6 @@
 import { ContextMenuConfig, ContextMenuItemConfig } from "../contextMenu";
 import { FlowNode, FlowNodeConfig } from '../node';
-import { PortConfig, PortType, portConfigTypes, typeSetsCompatible } from "../port";
+import { Cast, PortConfig, PortType, portConfigTypes, typeSetsConnect } from "../port";
 import { Vector2 } from "../types/vector2";
 import { NodeSubsystem } from "./subsystem";
 
@@ -15,18 +15,16 @@ export interface NodeMenuFilter {
     /** Types that side has to accept. An empty list takes anything. */
     types: Array<string>;
 
+    casts?: Array<Cast>;
+
     onCreated?: (node: FlowNode) => void;
 }
 
 function offersMatchingPort(config: FlowNodeConfig, filter: NodeMenuFilter): boolean {
-    const ports: Array<PortConfig> | undefined =
-        filter.needs === PortType.Input ? config.inputs : config.outputs;
-
-    if (ports === undefined) {
-        return false;
+    if (filter.needs === PortType.Input) {
+        return (config.inputs ?? []).some((port) => typeSetsConnect(filter.types, portConfigTypes(port), filter.casts));
     }
-
-    return ports.some((port) => typeSetsCompatible(portConfigTypes(port), filter.types));
+    return (config.outputs ?? []).some((port) => typeSetsConnect(portConfigTypes(port), filter.types, filter.casts));
 }
 
 interface PublisherNodes {

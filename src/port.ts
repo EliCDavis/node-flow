@@ -91,6 +91,33 @@ export function typeSetsCompatible(a: Array<string>, b: Array<string>): boolean 
     return a.some((type) => b.includes(type));
 }
 
+/**
+ * Lets an output of type `from` feed an input of type `to`
+ */
+export interface Cast {
+    from: string;
+    to: string;
+}
+
+/**
+ * Whether an output may feed an input: their types overlap, or a cast takes
+ * one of the output's types to one of the input's.
+ */
+export function portsConnect(output: Port | undefined | null, input: Port | undefined | null, casts?: Array<Cast>): boolean {
+    if (!output || !input) {
+        return false;
+    }
+
+    return typeSetsConnect(output.acceptedTypes(), input.acceptedTypes(), casts);
+}
+
+export function typeSetsConnect(output: Array<string>, input: Array<string>, casts?: Array<Cast>): boolean {
+    if (typeSetsCompatible(output, input)) {
+        return true;
+    }
+    return (casts ?? []).some((cast) => output.includes(cast.from) && input.includes(cast.to));
+}
+
 export function portConfigTypes(config: PortConfig): Array<string> {
     if (config.anyType === true) {
         return [];
@@ -137,6 +164,10 @@ function fallbackColor(type: string, s: number): string {
     const color: Color = { r: 0, g: 0, b: 0 };
     HSV2RGB(hsv, color);
     return RgbToHex(color);
+}
+
+export function portTypeColor(type: string): string {
+    return fallbackColor(type, 1);
 }
 
 export class Port {

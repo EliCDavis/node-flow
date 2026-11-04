@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
 import { BuildMarkdown } from '../src/markdown/markdown';
 import { CodeBlockEntry } from '../src/markdown/entry';
-import { Theme } from '../src/theme';
+import { Theme, setTheme } from '../src/theme';
 
 interface Drawn {
     box: { y: number; height: number } | null;
@@ -47,6 +47,26 @@ describe('a markdown code block', () => {
     it('does not keep the newline before the closing backticks as an empty last line', () => {
         const { drawn } = draw('```\nconst a = 1;\nconst b = 2;\n```');
         assert.deepEqual(drawn.lines.map((l) => l.text), ['const a = 1;', 'const b = 2;']);
+    });
+
+    it('draws in the theme code font, apart from the note text', () => {
+        setTheme({ FontFamily: 'Tahoma', Note: { CodeFontFamily: 'VT323' } });
+        try {
+            const entry = BuildMarkdown('```\none\n```')[0] as CodeBlockEntry;
+            assert.equal(entry.text().style().getFont(), 'VT323');
+        } finally {
+            setTheme();
+        }
+    });
+
+    it('draws in the theme font when no code font is set', () => {
+        setTheme({ FontFamily: 'Tahoma' });
+        try {
+            const entry = BuildMarkdown('```\none\n```')[0] as CodeBlockEntry;
+            assert.equal(entry.text().style().getFont(), 'Tahoma');
+        } finally {
+            setTheme();
+        }
     });
 
     it('reports the height it drew', () => {
